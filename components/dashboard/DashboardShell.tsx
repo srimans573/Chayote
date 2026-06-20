@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ClipboardCheck, Grid2X2, UserRound } from "lucide-react";
+import { ClipboardCheck, Grid2X2, Radio, UserRound } from "lucide-react";
 import type { ReactNode } from "react";
 
 function classNames(...classes: Array<string | false | undefined>) {
@@ -17,6 +17,7 @@ const navItems = [
     label: "Assessments",
   },
   { href: "/dashboard/candidates", icon: <UserRound size={16} />, label: "Candidates" },
+  { href: "/dashboard/sessions", icon: <Radio size={16} />, label: "Interviews" },
 ];
 
 function isActivePath(pathname: string, href: string) {
