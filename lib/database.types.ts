@@ -344,7 +344,24 @@ export type Database = {
       };
     };
     Views: Record<string, never>;
-    Functions: Record<string, never>;
+    Functions: {
+      register_candidate_for_assessment: {
+        Args: {
+          p_access_code: string;
+          p_full_name: string;
+        };
+        Returns: Array<{
+          candidate_id: string;
+          assessment_id: string;
+          assessment_title: string;
+          candidate_name: string;
+          time_limit_minutes: number;
+          expires_at: string | null;
+          technologies: Database["public"]["Enums"]["assessment_technology"][];
+          code_files: Json;
+        }>;
+      };
+    };
     Enums: {
       app_role: AuthRole;
       account_status: "active" | "suspended";

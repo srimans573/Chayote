@@ -8,12 +8,18 @@ type CodebaseFilesModalProps = {
   files: CodebaseFile[];
   title?: string;
   triggerLabel?: string;
+  variant?: "dark" | "light";
 };
+
+function cx(...classes: Array<string | false | undefined>) {
+  return classes.filter(Boolean).join(" ");
+}
 
 export function CodebaseFilesModal({
   files,
   title = "Code files",
   triggerLabel = "Preview code files",
+  variant = "light",
 }: CodebaseFilesModalProps) {
   const [open, setOpen] = useState(false);
   const [activePath, setActivePath] = useState(files[0]?.path ?? "");
@@ -26,7 +32,12 @@ export function CodebaseFilesModal({
   return (
     <>
       <button
-        className="inline-flex h-9 items-center justify-center gap-2 rounded-[3px] border border-[#d8d5cf] px-3 text-[13px] font-semibold text-[#202322] transition duration-150 hover:border-[#c7c2ba] hover:bg-[#fbfaf7] disabled:cursor-not-allowed disabled:opacity-60"
+        className={cx(
+          "inline-flex h-9 items-center justify-center gap-2 rounded-[3px] border px-3 text-[13px] font-semibold transition duration-150 disabled:cursor-not-allowed disabled:opacity-60",
+          variant === "dark"
+            ? "border-white/20 text-white hover:border-white/35 hover:bg-white/10"
+            : "border-[#d8d5cf] text-[#202322] hover:border-[#c7c2ba] hover:bg-[#fbfaf7]",
+        )}
         disabled={files.length === 0}
         onClick={() => {
           setActivePath(files[0]?.path ?? "");

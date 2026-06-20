@@ -77,7 +77,11 @@ export default async function AssessmentDetailPage({
               {assessment.candidateAccessCode}
             </p>
             <p className="mt-3 text-sm leading-6 text-[#62675e]">
-              Candidates can enter this code to start the assessment.
+              Candidates can enter this code at{" "}
+              <span className="font-mono font-semibold text-[#202322]">
+                /assessment
+              </span>
+              .
             </p>
           </article>
 
