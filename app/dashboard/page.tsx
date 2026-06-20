@@ -1,157 +1,218 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowRight, ChevronRight, RefreshCw, SlidersVertical } from "lucide-react";
-import { assessments, candidates, pulseEvents, roles } from "@/app/dashboard/data";
-import { MetricCard } from "@/components/dashboard/MetricCard";
-import { StatusDot } from "@/components/dashboard/StatusDot";
+import { ArrowRight, Plus } from "lucide-react";
+import {
+  getDashboardData,
+  type AssessmentStatus,
+  type CandidateRisk,
+} from "@/app/dashboard/data";
 
 export const metadata: Metadata = {
   title: "Dashboard | Chayote",
 };
 
-export default function DashboardPage() {
-  const recruiterName = "Test Recruiter";
-  const liveAssessments = assessments.filter((assessment) => assessment.status === "Live");
-  const activeRoles = roles.filter((role) => role.status === "Active");
-  const averageScore = Math.round(
-    candidates.reduce((sum, candidate) => sum + candidate.score, 0) /
-      candidates.filter((candidate) => candidate.score > 0).length,
-  );
+function statusClass(status: AssessmentStatus) {
+  if (status === "live") {
+    return "bg-[#d7ff5a] text-[#202322]";
+  }
+
+  if (status === "reviewing") {
+    return "bg-[#202322] text-white";
+  }
+
+  if (status === "complete") {
+    return "bg-[#e5e8df] text-[#4f564a]";
+  }
+
+  return "bg-[#efeeeb] text-[#555a51]";
+}
+
+function riskClass(risk: CandidateRisk) {
+  if (risk === "high") {
+    return "bg-[#ffe7df] text-[#80321d]";
+  }
+
+  if (risk === "medium") {
+    return "bg-[#fff0c2] text-[#6f5314]";
+  }
+
+  return "bg-[#e5e8df] text-[#4f564a]";
+}
+
+export default async function DashboardPage() {
+  const data = await getDashboardData();
 
   return (
     <>
-      <section className="flex flex-col gap-2 xl:flex-row xl:items-end xl:justify-between">
+      <section className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-[28px] font-black leading-tight text-[#202322]">
-            Hey {recruiterName}
+            Dashboard
           </h1>
+          {data.profile ? (
+            <p className="mt-2 text-sm text-[#55594f]">
+              {data.profile.full_name}
+            </p>
+          ) : null}
         </div>
-        <p className="flex items-center gap-2 text-xs text-[#55594f]">
-          Data synced: just now
-          <RefreshCw size={14} />
+        <Link
+          className="inline-flex h-9 items-center justify-center gap-2 rounded-[3px] bg-primary px-3 text-[13px] font-bold text-[#111510] transition duration-150 hover:bg-[#d7ff5a] sm:w-fit"
+          href="/dashboard/assessments/new"
+        >
+          <Plus size={16} />
+          Create assessment
+        </Link>
+      </section>
+
+      {data.error ? (
+        <p className="mt-4 rounded-[6px] border border-[#eadbd4] bg-[#fff8f5] px-4 py-3 text-sm text-[#7a3a27]">
+          {data.error}
         </p>
-      </section>
+      ) : null}
 
-      <section className="mt-6 grid gap-3 xl:grid-cols-3">
-        <MetricCard detail="+3 this week" label="Active Pipelines" value={`${activeRoles.length}`} />
-        <MetricCard detail="-2.4d" label="Time to Hire (Avg)" suffix="d" value="18" />
-        <MetricCard detail="Accuracy" label="Assessment Quality" suffix="%" value={`${averageScore}`} />
-      </section>
-
-      <section className="mt-7 grid gap-4 xl:grid-cols-[1fr_240px]">
+      <section className="mt-6 grid gap-5 xl:grid-cols-2">
         <div className="min-w-0">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-lg font-bold">Active Roles</h2>
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <h2 className="text-lg font-bold">Assessments</h2>
             <Link
               className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#353a32] transition duration-150 hover:text-[#111510]"
-              href="/dashboard/roles"
+              href="/dashboard/assessments"
             >
               <span>View all</span>
-              <ArrowRight className="inline-block" size={14} />
+              <ArrowRight size={14} />
             </Link>
           </div>
 
-          <div className="overflow-hidden rounded-[8px] bg-white">
-            <div className="grid grid-cols-[1.4fr_0.9fr_0.7fr_0.4fr] border-b border-[#f0eeea] px-4 py-2.5 text-xs font-semibold text-[#4d5148]">
-              <span>Role Identity</span>
-              <span>Pipeline</span>
-              <span>Status</span>
-              <span>Action</span>
-            </div>
-            {roles.slice(0, 3).map((role) => (
-              <div
-                className="grid min-h-[72px] grid-cols-[1.4fr_0.9fr_0.7fr_0.4fr] items-center border-b border-[#f0eeea] px-4 last:border-b-0"
-                key={role.id}
-              >
-                <div>
-                  <p className="max-w-[170px] text-[15px] font-medium leading-5">{role.title}</p>
-                  <p className="mt-1 text-xs text-[#3f443b]">
-                    {role.id} · {role.team}
-                  </p>
-                </div>
-                <div className="flex items-center">
-                  {[role.pipeline.applied, role.pipeline.assessment, role.pipeline.interview].map(
-                    (value, index) => (
-                      <span
-                        className={
-                          index === 2
-                            ? "flex h-6 min-w-6 items-center justify-center rounded-full bg-[#d7ff5a] px-1.5 text-[11px] font-semibold text-[#202322]"
-                            : "-mr-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-[#efeeeb] px-1 text-[11px] text-[#62665e]"
-                        }
-                        key={`${role.id}-${value}-${index}`}
-                      >
-                        {value}
-                      </span>
-                    ),
-                  )}
-                </div>
-                <span className="flex items-center gap-2 text-xs font-semibold">
-                  <StatusDot active={role.status === "Active"} />
-                  {role.status}
-                </span>
-                <Link
-                  aria-label={`Open ${role.title}`}
-                  className="inline-flex transition duration-150 hover:translate-x-0.5"
-                  href="/dashboard/roles"
+          <div className="overflow-hidden rounded-[8px] border border-[#f0eeea] bg-white">
+            {data.assessments.length > 0 ? (
+              data.assessments.map((assessment) => (
+                <article
+                  className="border-b border-[#f0eeea] px-4 py-4 last:border-b-0"
+                  key={assessment.id}
                 >
-                  <ChevronRight size={18} />
-                </Link>
-              </div>
-            ))}
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0">
+                      <p className="truncate text-base font-semibold text-[#202322]">
+                        {assessment.title}
+                      </p>
+                      <p className="mt-1 text-sm text-[#62675e]">
+                        {assessment.technologyLabel}
+                      </p>
+                    </div>
+                    <span
+                      className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${statusClass(
+                        assessment.status,
+                      )}`}
+                    >
+                      {assessment.statusLabel}
+                    </span>
+                  </div>
+
+                  <div className="mt-4 grid grid-cols-3 gap-3 text-sm">
+                    <div>
+                      <p className="text-xs font-semibold text-[#6b7067]">
+                        Candidates
+                      </p>
+                      <p className="mt-1 font-bold">{assessment.candidateCount}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold text-[#6b7067]">
+                        Time
+                      </p>
+                      <p className="mt-1 font-bold">
+                        {assessment.timeLimitMinutes}m
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold text-[#6b7067]">
+                        Completion
+                      </p>
+                      <p className="mt-1 font-bold">
+                        {assessment.completionPercent}%
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 flex items-center justify-between gap-3 text-xs text-[#62675e]">
+                    <span>Expires {assessment.dueLabel}</span>
+                    <Link
+                      className="font-semibold text-[#202322] underline-offset-4 transition duration-150 hover:underline"
+                      href={`/dashboard/assessments/${assessment.id}`}
+                    >
+                      Open
+                    </Link>
+                  </div>
+                </article>
+              ))
+            ) : (
+              <p className="px-4 py-8 text-sm text-[#62675e]">
+                No assessments found in Supabase.
+              </p>
+            )}
           </div>
         </div>
 
-        <aside className="min-w-0">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-lg font-bold">
-              Pulse Feed
-            </h2>
-            <button className="inline-grid h-7 w-7 place-items-center text-[#55594f]" type="button">
-              <SlidersVertical size={16} />
-            </button>
+        <div className="min-w-0">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <h2 className="text-lg font-bold">Candidates</h2>
+            <Link
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#353a32] transition duration-150 hover:text-[#111510]"
+              href="/dashboard/candidates"
+            >
+              <span>View all</span>
+              <ArrowRight size={14} />
+            </Link>
           </div>
 
-          <div className="space-y-3">
-            {pulseEvents.slice(0, 2).map((item) => (
-              <article className="rounded-[8px] bg-white px-4 py-3.5" key={item.id}>
-                <div className="flex items-center justify-between gap-4">
-                  <p className="flex items-center gap-2 text-xs font-semibold">
-                    <StatusDot active={item.tone !== "warning"} />
-                    {item.label}
-                  </p>
-                  <p className="text-xs text-[#4a4f46]">{item.time}</p>
-                </div>
-                <p className="mt-3 text-sm leading-6 text-[#50554d]">{item.text}</p>
-                {item.action ? (
-                  <button
-                    className="mt-4 h-8 w-full rounded-[3px] border border-[#e4e1dc] text-xs font-semibold text-[#2b3028] transition duration-150 hover:border-[#c7c2ba] hover:bg-[#fbfaf7]"
-                    type="button"
-                  >
-                    {item.action}
-                  </button>
-                ) : null}
-              </article>
-            ))}
-          </div>
-        </aside>
-      </section>
+          <div className="overflow-hidden rounded-[8px] border border-[#f0eeea] bg-white">
+            {data.candidates.length > 0 ? (
+              data.candidates.map((candidate) => (
+                <article
+                  className="border-b border-[#f0eeea] px-4 py-4 last:border-b-0"
+                  key={candidate.id}
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0">
+                      <p className="truncate text-base font-semibold text-[#202322]">
+                        {candidate.name}
+                      </p>
+                      <p className="mt-1 text-sm text-[#62675e]">
+                        {candidate.roleName}
+                      </p>
+                    </div>
+                    <span
+                      className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${riskClass(
+                        candidate.risk,
+                      )}`}
+                    >
+                      {candidate.riskLabel}
+                    </span>
+                  </div>
 
-      <section className="mt-5 rounded-[8px] bg-white px-4 py-3.5">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="text-xs font-semibold text-[#5a5f56]">
-              Live Assessments
-            </p>
-            <p className="mt-2 text-sm text-[#5b6158]">
-              {liveAssessments.length} assessments are currently collecting responses.
-            </p>
+                  <div className="mt-4 grid grid-cols-3 gap-3 text-sm">
+                    <div>
+                      <p className="text-xs font-semibold text-[#6b7067]">Stage</p>
+                      <p className="mt-1 font-bold">{candidate.stageLabel}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold text-[#6b7067]">Score</p>
+                      <p className="mt-1 font-bold">{candidate.score ?? "-"}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold text-[#6b7067]">
+                        Activity
+                      </p>
+                      <p className="mt-1 font-bold">{candidate.activityLabel}</p>
+                    </div>
+                  </div>
+                </article>
+              ))
+            ) : (
+              <p className="px-4 py-8 text-sm text-[#62675e]">
+                No candidates found in Supabase.
+              </p>
+            )}
           </div>
-          <Link
-            className="inline-flex h-8 items-center justify-center rounded-[3px] bg-primary px-3 text-[13px] font-bold text-[#111510] transition duration-150 hover:bg-[#d7ff5a]"
-            href="/dashboard/assessments"
-          >
-            Manage assessments
-          </Link>
         </div>
       </section>
     </>
