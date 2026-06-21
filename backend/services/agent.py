@@ -28,6 +28,13 @@ UNCLEAR_RESPONSES = [
     "Can you walk me through that again? I lost the thread.",
 ]
 
+RUBRIC_ENFORCEMENT = """Rubric enforcement:
+- Treat each rubric table row as an independent requirement scored from 1 to 4.
+- A score of 3 or 4 requires codebase-specific evidence: files, functions, data fields, state transitions, failure modes, tests, or tradeoffs.
+- Do not accept broad definitions, memorized concepts, or confident generic answers as sufficient.
+- If the candidate gives a generic answer, ask one targeted follow-up that forces them to anchor the answer in the visible codebase.
+- Move on only after collecting code-specific evidence or clearly noting that the evidence is missing."""
+
 SHARED_SYSTEM = """You are a senior software engineer conducting a technical interview.
 You are sitting next to the candidate as they code — not hosting a show, not teaching a class.
 
@@ -259,7 +266,9 @@ async def _validate_and_followup(
     user = f"""Interview rubric:
 {guidelines or "(no rubric provided)"}
 
-Candidate's current code:
+{RUBRIC_ENFORCEMENT}
+
+The candidate's current code:
 {code}
 
 Conversation so far:
@@ -300,15 +309,7 @@ async def _validate_claim(
     user = f"""Interview rubric:
 {guidelines or "(no rubric provided)"}
 
-Candidate's current code:
-{code}
-
-Conversation so far:
-{history}
-
-Candidate just claimed: "{utterance}"
-Current rubric stage: {stage}
-Times this area has been probed: {attempts}
+The candidate is stuck or confused. Give them ONE brief nudge - 1-2 sentences max. Speak like a colleague sitting next to them. Don't lecture. Don't give the answer away. Use plain, direct language. No "Great question!" or filler phrases.
 
 {"IMPORTANT: This area has been probed " + str(attempts) + " times. Wrap it up now — affirm what they got right, briefly note what was missed if anything, then move on to the next rubric area." if force_advance else """Confirm or correct their claim in 1-2 sentences.
 - If correct or a reasonable approach: affirm it clearly ("That's right" / "Solid") and optionally probe depth once more.
@@ -329,7 +330,9 @@ async def _answer_candidate_question(
     user = f"""Interview rubric:
 {guidelines or "(no rubric provided)"}
 
-Candidate's current code:
+{RUBRIC_ENFORCEMENT}
+
+The candidate's current code:
 {code}
 
 Conversation so far:
@@ -358,8 +361,10 @@ Candidate's current code:
 Conversation so far:
 {history}
 
-Candidate is stuck: "{utterance}"
-Current rubric stage: {stage}
+The candidate asked a question or made a statement about their approach. Do ONE of the following:
+1. If their answer is generic, ask a targeted follow-up that forces a concrete file, function, data field, state transition, failure mode, test, or tradeoff from this codebase.
+2. If their question shows they are ready to move to the next area of the rubric, ask the next natural interview question from the rubric - conversationally, like a curious engineer, not a scripted interviewer.
+3. If they need a nudge on the current area, give a brief practical hint (1-2 sentences).
 
 Give them ONE brief nudge — 1-2 sentences. Point at something concrete in the code or problem without giving the answer away.
 
