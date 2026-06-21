@@ -108,18 +108,20 @@ async def classify_intent(utterance: str, last_agent: str | None, history: list[
 
     system = """You classify what a coding interview candidate just said into exactly one of these intents:
 
-question   — candidate asked the interviewer something directly
-answer     — candidate is responding to the interviewer's last question
-claim      — candidate made a technical assertion about their code or approach
-stuck      — candidate expressed confusion, being lost, or asked for a hint
-decision   — candidate announced a direction or choice ("I'll use X", "I'm going to try Y")
-filler     — utterance is pure filler with no semantic content ("um", "uh", "like", "yeah so")
-unclear    — utterance is incoherent, too fragmented to classify, or semantically empty
-off_topic  — clearly unrelated to the interview (personal remarks, ambient noise, non-technical chatter)
+question     — candidate asked the interviewer something directly
+answer       — candidate is responding to the interviewer's last question
+claim        — candidate made a technical assertion about their code or approach
+stuck        — candidate expressed confusion, being lost, or asked for a hint
+decision     — candidate announced a direction or choice ("I'll use X", "I'm going to try Y")
+end_request  — candidate explicitly wants to end, quit, or stop the interview ("end the interview", "I'm done", "I quit", "just end it")
+filler       — utterance is pure filler with no semantic content ("um", "uh", "like", "yeah so")
+unclear      — utterance is incoherent, too fragmented to classify, or semantically empty
+off_topic    — clearly unrelated to the interview (personal remarks, ambient noise, non-technical chatter)
 
 Instructions:
 - First mentally strip filler words ("um", "like", "you know", "so yeah") and identify the semantic core.
 - If the semantic core is empty after stripping, return: filler
+- end_request takes priority — if the candidate is asking to stop or end the interview, return end_request even if they seem frustrated or off-topic.
 - Use the interviewer's last turn to determine if the candidate is answering a question.
 - Return ONLY the single intent word. No explanation, no punctuation.
 
@@ -131,7 +133,10 @@ Candidate: "wait I'm totally lost on this" → stuck
 Candidate: "I'll go with a hash map" → decision
 Candidate: "yeah so like the recursion handles the base case" [after interviewer asked about base case] → answer
 Candidate: "my phone just buzzed sorry" → off_topic
-Candidate: "uh I mean the thing with the... yeah" → unclear"""
+Candidate: "uh I mean the thing with the... yeah" → unclear
+Candidate: "I'm done, just end the interview" → end_request
+Candidate: "can we end this? I don't know what else to do" → end_request
+Candidate: "I quit, I'm done with this" → end_request"""
 
     user = f"""{last_agent_line}
 
@@ -149,7 +154,7 @@ Intent:"""
         temperature=0.1,
     )
     result = response.choices[0].message.content.strip().lower()
-    valid = {"question", "answer", "claim", "stuck", "decision", "filler", "unclear", "off_topic"}
+    valid = {"question", "answer", "claim", "stuck", "decision", "end_request", "filler", "unclear", "off_topic"}
     return result if result in valid else "unclear"
 
 
@@ -212,7 +217,7 @@ async def maybe_respond(session_id: str, r: redis.Redis) -> str | None:
     elif intent == "claim":
         attempts = await increment_stage_attempts(session_id, r)
         response = await _validate_claim(meta, code, utterance, history_text, stage, guidelines, attempts)
-        if attempts >= 3 and response and "NONE" not in response.upper():
+        if attempts >= 2 and response and "NONE" not in response.upper():
             await advance_stage(session_id, r)
     elif intent == "question":
         response = await _answer_candidate_question(meta, code, utterance, history_text, stage, guidelines)
@@ -220,6 +225,10 @@ async def maybe_respond(session_id: str, r: redis.Redis) -> str | None:
         response = await _guide_response(meta, code, utterance, history_text, stage, guidelines)
     elif intent == "decision":
         response = await _affirm_decision(meta, code, utterance, history_text, stage, guidelines)
+    elif intent == "end_request":
+        response = "Got it — thanks for your time today. We'll wrap up here."
+        await r.set(f"session:{session_id}:interview_complete", "1")
+        log.info("[interview] candidate requested end — marked complete")
     elif intent == "off_topic":
         response = await _redirect_offtopic(meta, last_agent)
     else:
@@ -254,7 +263,7 @@ async def _validate_and_followup(
     meta: dict, code: str, utterance: str, last_agent: str | None,
     history: str, stage: int, guidelines: str, attempts: int = 1
 ) -> dict:
-    force_advance = attempts >= 3
+    force_advance = attempts >= 2
 
     user = f"""Interview rubric:
 {guidelines or "(no rubric provided)"}
@@ -270,14 +279,15 @@ Candidate just answered: "{utterance}"
 Current rubric stage: {stage}
 Times this area has been probed: {attempts}
 
-{"IMPORTANT: This area has been probed " + str(attempts) + " times. You MUST move on now regardless of answer quality. Either: affirm as a solid/workable approach and advance, or acknowledge the gap and move on." if force_advance else """Decide based on the answer quality:
-- Fully correct or a reasonable working approach → affirm clearly and ask the next rubric question.
-- Incorrect → point at the specific thing to reconsider without saying "wrong". Ask one more focused question."""}
+{"IMPORTANT: This area has been probed " + str(attempts) + " times. Move on now — affirm what they got and ask the next rubric question regardless of how complete the answer was." if force_advance else """Bias toward accepting and moving on. Only push back if the answer is clearly wrong or reveals a dangerous misconception.
+- Reasonable or partially correct → affirm and move to the next rubric question immediately.
+- Clearly wrong → correct one specific thing in one sentence, then still move to the next rubric question.
+- Do NOT ask a follow-up clarifying question in the same area. Either affirm and advance, or correct and advance."""}
 
 Style illustrations ONLY — vary your phrasing, do not copy these:
-- "Right, that works. Now walk me through the edge case when the input is empty."
-- "That's a solid approach — not the most optimal but gets the job done. What about the boundary condition?"
-- "We've spent some time here — let's move on. How would you handle [next area]?"
+- "Yeah that's right. How does the data get from fetchEmployees to the UI?"
+- "Close enough — the approach works. Walk me through what useEmployees is doing."
+- "Not quite on the error part, but let's keep moving — how does data flow to the components?"
 
 Return a JSON object with exactly these fields:
 {{
@@ -295,7 +305,7 @@ async def _validate_claim(
     meta: dict, code: str, utterance: str,
     history: str, stage: int, guidelines: str, attempts: int = 1
 ) -> str:
-    force_advance = attempts >= 3
+    force_advance = attempts >= 2
 
     user = f"""Interview rubric:
 {guidelines or "(no rubric provided)"}

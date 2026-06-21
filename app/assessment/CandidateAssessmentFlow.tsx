@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Camera, Check, Mic, MonitorUp, ShieldCheck } from "lucide-react";
 import {
   joinAssessment,
@@ -77,7 +78,9 @@ function EntryStep({
   state,
   formAction,
   pending,
+  defaultCode,
 }: {
+  defaultCode?: string;
   formAction: (payload: FormData) => void;
   pending: boolean;
   state: CandidateEntryState;
@@ -117,6 +120,7 @@ function EntryStep({
             Assessment code
             <input
               className="h-11 rounded-[3px] border border-[#dedbd5] bg-white px-3 font-mono text-[15px] uppercase tracking-[0.12em] outline-none focus:border-[#202322] focus:ring-2 focus:ring-[#d7ff5a]"
+              defaultValue={defaultCode}
               name="accessCode"
               placeholder="ABC123"
               required
@@ -448,6 +452,7 @@ function AssessmentStep({ session }: { session: CandidateAssessmentSession }) {
 }
 
 export function CandidateAssessmentFlow() {
+  const searchParams = useSearchParams();
   const [entryState, formAction, pending] = useActionState(
     joinAssessment,
     initialCandidateEntryState,
@@ -481,6 +486,11 @@ export function CandidateAssessmentFlow() {
   }
 
   return (
-    <EntryStep formAction={formAction} pending={pending} state={entryState} />
+    <EntryStep
+      defaultCode={searchParams.get("code") ?? undefined}
+      formAction={formAction}
+      pending={pending}
+      state={entryState}
+    />
   );
 }

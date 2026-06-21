@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import type { Metadata } from "next";
 import { CandidateAssessmentFlow } from "@/app/assessment/CandidateAssessmentFlow";
 
@@ -7,5 +8,9 @@ export const metadata: Metadata = {
 };
 
 export default function AssessmentPage() {
-  return <CandidateAssessmentFlow />;
+  return (
+    <Suspense>
+      <CandidateAssessmentFlow />
+    </Suspense>
+  );
 }

@@ -9,6 +9,7 @@ import {
   listSessions,
   VOICE_API_BASE,
   type BackendSession,
+  type RubricScore,
   type SessionInsights,
   type TimelineEvent,
 } from "@/lib/voiceAgent";
@@ -167,6 +168,32 @@ export default function InterviewSessionsPage() {
                 </div>
               </div>
             </section>
+
+            {/* Rubric scorecard */}
+            {insights.rubric_scores?.length > 0 ? (
+              <section className="mt-4 rounded-[8px] border border-[#f0eeea] bg-white px-5 py-4">
+                <h2 className="text-base font-bold text-[#202322]">Rubric scorecard</h2>
+                <ul className="mt-3 space-y-2">
+                  {insights.rubric_scores.map((item: RubricScore, i: number) => (
+                    <li key={i} className="flex gap-3 items-start rounded-[6px] border border-[#f0eeea] px-3 py-2.5">
+                      <span className={`mt-0.5 shrink-0 rounded-full px-2.5 py-0.5 text-xs font-bold ${
+                        item.score === "pass"
+                          ? "bg-[#d7ff5a] text-[#202322]"
+                          : item.score === "partial"
+                            ? "bg-[#fff3c4] text-[#7a5a00]"
+                            : "bg-[#ffe7df] text-[#80321d]"
+                      }`}>
+                        {item.score}
+                      </span>
+                      <div>
+                        <p className="text-sm font-semibold text-[#202322]">{item.question}</p>
+                        <p className="mt-0.5 text-xs leading-relaxed text-[#62675e]">{item.reason}</p>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ) : null}
 
             {/* Intent map */}
             {insights.intent_map.length > 0 ? (

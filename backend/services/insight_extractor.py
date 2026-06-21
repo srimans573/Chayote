@@ -69,6 +69,14 @@ Return a JSON object with exactly these fields:
   "gaps": ["short phrase", ...],
   "advance_recommend": true or false,
   "advance_reason": "one sentence explaining the recommendation",
+  "rubric_scores": [
+    {{
+      "question": "short question title matching the rubric heading, e.g. Q1: API Layer",
+      "score": "pass" or "partial" or "fail",
+      "reason": "one sentence explaining the score based on what the candidate actually said"
+    }},
+    ...
+  ],
   "intent_map": [
     {{
       "ts_ms": <timestamp in ms from conversation history, use 0 if unknown>,
@@ -81,6 +89,7 @@ Return a JSON object with exactly these fields:
   ]
 }}
 
+For rubric_scores: score every question in the rubric using its Pass/Partial/Fail criteria. Base the score strictly on evidence from the conversation — what the candidate actually said, not what they should have said. If a rubric question was never reached, score it "fail" with reason "not reached in session".
 For intent_map: include every meaningful candidate turn and key agent turns. Skip pure filler. Labels must be concise past-tense phrases like "explained the filter logic" or "got stuck on edge case". Do not copy these examples directly."""
 
     try:

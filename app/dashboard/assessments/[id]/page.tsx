@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, ExternalLink } from "lucide-react";
 import { getAssessmentDetailsData } from "@/app/dashboard/data";
 import { CodebaseFilesModal } from "@/components/dashboard/CodebaseFilesModal";
 
@@ -48,10 +48,20 @@ export default async function AssessmentDetailPage({
         </div>
 
         {assessment ? (
-          <CodebaseFilesModal
-            files={codebaseFiles}
-            title={`${assessment.title} codebase`}
-          />
+          <div className="flex shrink-0 items-center gap-2">
+            <Link
+              className="inline-flex h-9 items-center gap-1.5 rounded-[3px] border border-[#a3c740] bg-[#f3ffe0] px-3 text-sm font-semibold text-[#314200] transition duration-150 hover:bg-[#e8ffc4]"
+              href={`/assessment?code=${assessment.candidateAccessCode}`}
+              target="_blank"
+            >
+              <ExternalLink size={14} />
+              Assessment link
+            </Link>
+            <CodebaseFilesModal
+              files={codebaseFiles}
+              title={`${assessment.title} codebase`}
+            />
+          </div>
         ) : null}
       </section>
 

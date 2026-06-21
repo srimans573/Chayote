@@ -139,12 +139,19 @@ export type IntentMoment = {
   quote: string;
 };
 
+export type RubricScore = {
+  question: string;
+  score: "pass" | "partial" | "fail";
+  reason: string;
+};
+
 export type SessionInsights = {
   summary: string;
   strengths: string[];
   gaps: string[];
   advance_recommend: boolean;
   advance_reason: string;
+  rubric_scores: RubricScore[];
   stuck_count: number;
   hint_count: number;
   final_stage: number;
