@@ -150,8 +150,15 @@ export function InterviewWorkspace({
   const [panelOpen, setPanelOpen] = useState(true);
   const [secondsLeft, setSecondsLeft] = useState(() => initialSeconds(session));
 
-  const { status, messages, interim, error, sessionId, speaking, start, end } =
+  const { status, messages, interim, error, sessionId, speaking, interviewComplete, start, end } =
     useInterviewSession();
+
+  // Auto-end when agent signals all rubric areas are covered
+  useEffect(() => {
+    if (interviewComplete && status === "live") {
+      void end();
+    }
+  }, [interviewComplete, status, end]);
 
   const activeFile = files.find((file) => file.path === activePath) ?? files[0] ?? null;
   const activeName = activeFile ? activeFile.path.split("/").pop() : "";

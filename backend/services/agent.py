@@ -74,7 +74,7 @@ def _last_agent_turn(history: list[dict]) -> str | None:
 
 
 # ---------------------------------------------------------------------------
-# Stage helpers (unchanged)
+# Stage helpers
 # ---------------------------------------------------------------------------
 
 async def get_stage(session_id: str, r: redis.Redis) -> int:
@@ -84,6 +84,18 @@ async def get_stage(session_id: str, r: redis.Redis) -> int:
 
 async def advance_stage(session_id: str, r: redis.Redis):
     await r.incr(f"session:{session_id}:current_stage")
+    await r.set(f"session:{session_id}:stage_attempts", 0)
+    log.info(f"[stage] advanced to stage {await get_stage(session_id, r)}")
+
+
+async def get_stage_attempts(session_id: str, r: redis.Redis) -> int:
+    val = await r.get(f"session:{session_id}:stage_attempts")
+    return int(val) if val else 0
+
+
+async def increment_stage_attempts(session_id: str, r: redis.Redis) -> int:
+    val = await r.incr(f"session:{session_id}:stage_attempts")
+    return int(val)
 
 
 # ---------------------------------------------------------------------------
@@ -179,9 +191,29 @@ async def maybe_respond(session_id: str, r: redis.Redis) -> str | None:
     history_text = _format_history(history)
 
     if intent == "answer":
-        response = await _validate_and_followup(meta, code, utterance, last_agent, history_text, stage, guidelines)
+        attempts = await increment_stage_attempts(session_id, r)
+        result = await _validate_and_followup(meta, code, utterance, last_agent, history_text, stage, guidelines, attempts)
+        response = result["response"]
+        if result.get("affirmed") and result.get("label"):
+            await r.rpush(f"session:{session_id}:events", json.dumps({
+                "type": "correct_answer",
+                "t_start": time.time(),
+                "t_end": time.time(),
+                "quote": utterance,
+                "label": result["label"],
+                "stage": stage,
+            }))
+            log.info(f"[event] correct_answer logged: {result['label']!r}")
+        if result.get("interview_complete"):
+            await r.set(f"session:{session_id}:interview_complete", "1")
+            log.info("[interview] marked complete")
+        elif response and "NONE" not in response.upper():
+            await advance_stage(session_id, r)
     elif intent == "claim":
-        response = await _validate_claim(meta, code, utterance, history_text, stage, guidelines)
+        attempts = await increment_stage_attempts(session_id, r)
+        response = await _validate_claim(meta, code, utterance, history_text, stage, guidelines, attempts)
+        if attempts >= 3 and response and "NONE" not in response.upper():
+            await advance_stage(session_id, r)
     elif intent == "question":
         response = await _answer_candidate_question(meta, code, utterance, history_text, stage, guidelines)
     elif intent == "stuck":
@@ -220,8 +252,10 @@ async def maybe_respond(session_id: str, r: redis.Redis) -> str | None:
 
 async def _validate_and_followup(
     meta: dict, code: str, utterance: str, last_agent: str | None,
-    history: str, stage: int, guidelines: str
-) -> str:
+    history: str, stage: int, guidelines: str, attempts: int = 1
+) -> dict:
+    force_advance = attempts >= 3
+
     user = f"""Interview rubric:
 {guidelines or "(no rubric provided)"}
 
@@ -234,23 +268,35 @@ Conversation so far:
 Your last question: "{last_agent or '(none)'}"
 Candidate just answered: "{utterance}"
 Current rubric stage: {stage}
+Times this area has been probed: {attempts}
 
-The candidate answered your last question. Do two things in 2-3 sentences:
-1. Briefly affirm if correct, or point at the specific thing to reconsider if wrong — never say "that's wrong" outright.
-2. Ask the next natural question from the rubric.
+{"IMPORTANT: This area has been probed " + str(attempts) + " times. You MUST move on now regardless of answer quality. Either: affirm as a solid/workable approach and advance, or acknowledge the gap and move on." if force_advance else """Decide based on the answer quality:
+- Fully correct or a reasonable working approach → affirm clearly and ask the next rubric question.
+- Incorrect → point at the specific thing to reconsider without saying "wrong". Ask one more focused question."""}
 
-These show the correct length and register ONLY — vary your phrasing, do not copy these:
-- "Right, because the recursion hits every node once. What about space complexity?"
-- "Not quite — think about what happens when the input's already sorted. What changes?"
-- "Yep. Now walk me through what happens at the boundary condition." """
+Style illustrations ONLY — vary your phrasing, do not copy these:
+- "Right, that works. Now walk me through the edge case when the input is empty."
+- "That's a solid approach — not the most optimal but gets the job done. What about the boundary condition?"
+- "We've spent some time here — let's move on. How would you handle [next area]?"
 
-    return await _call_openai(SHARED_SYSTEM, user)
+Return a JSON object with exactly these fields:
+{{
+  "response": "what you say to the candidate — spoken aloud, 1-3 sentences, no filler affirmations",
+  "affirmed": true if the candidate's answer was correct or acceptable, false if you are pushing back,
+  "label": "if affirmed=true: a short past-tense phrase for the insight log, e.g. 'correctly identified O(n log n) time complexity'. Empty string if affirmed=false.",
+  "interview_complete": true if ALL areas of the rubric have now been covered and there is nothing meaningful left to ask, false otherwise. If complete, the response should be a natural closing statement — thank the candidate and let them know the session is done.
+}}"""
+
+    raw = await _call_openai_json(SHARED_SYSTEM, user)
+    return raw if isinstance(raw, dict) else {"response": str(raw), "affirmed": False, "label": ""}
 
 
 async def _validate_claim(
     meta: dict, code: str, utterance: str,
-    history: str, stage: int, guidelines: str
+    history: str, stage: int, guidelines: str, attempts: int = 1
 ) -> str:
+    force_advance = attempts >= 3
+
     user = f"""Interview rubric:
 {guidelines or "(no rubric provided)"}
 
@@ -262,15 +308,16 @@ Conversation so far:
 
 Candidate just claimed: "{utterance}"
 Current rubric stage: {stage}
+Times this area has been probed: {attempts}
 
-The candidate made a technical assertion. Confirm or correct it in 1-2 sentences.
-If correct, you may probe depth with a follow-up question.
-If wrong, point at the specific thing to reconsider — don't say it's wrong outright.
+{"IMPORTANT: This area has been probed " + str(attempts) + " times. Wrap it up now — affirm what they got right, briefly note what was missed if anything, then move on to the next rubric area." if force_advance else """Confirm or correct their claim in 1-2 sentences.
+- If correct or a reasonable approach: affirm it clearly ("That's right" / "Solid") and optionally probe depth once more.
+- If incorrect: point at the specific thing to reconsider without saying "wrong"."""}
 
 Style illustrations ONLY — vary your phrasing, do not copy these:
-- "Yeah, that holds for the average case. What about worst case?"
+- "Yeah, that holds. What about the worst case?"
 - "Take another look at the loop bounds — what's the actual iteration count?"
-- "That's right. Does that change if the input has duplicates?" """
+- "Close enough — the approach works even if it's not optimal. Let's move on." """
 
     return await _call_openai(SHARED_SYSTEM, user)
 
@@ -374,3 +421,21 @@ async def _call_openai(system: str, user: str) -> str:
         temperature=0.4,
     )
     return response.choices[0].message.content.strip()
+
+
+async def _call_openai_json(system: str, user: str) -> dict:
+    log.debug("[openai] calling gpt-4o-mini (json)")
+    response = await client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ],
+        max_tokens=200,
+        temperature=0.4,
+        response_format={"type": "json_object"},
+    )
+    try:
+        return json.loads(response.choices[0].message.content)
+    except Exception:
+        return {"response": response.choices[0].message.content.strip(), "affirmed": False, "label": ""}

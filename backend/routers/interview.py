@@ -118,6 +118,9 @@ async def interview_ws(websocket: WebSocket, session_id: str):
                             "audio_b64": audio_b64,
                         })
                     await websocket.send_json({"type": "agent_response", "text": response})
+
+                    if await r.get(f"session:{session_id}:interview_complete"):
+                        await websocket.send_json({"type": "interview_complete"})
             except Exception as e:
                 print(f"[agent] error: {e}")
 
