@@ -156,6 +156,7 @@ export function InterviewWorkspace({
     interim,
     error,
     sessionId,
+    speaking,
     interviewComplete,
     start,
     end,
@@ -167,18 +168,13 @@ export function InterviewWorkspace({
     }
   }, [end, interviewComplete, status]);
 
-  const t = themeTokens[theme];
-  const notesByLine = useMemo(
-    () => new Map(notes.map((note) => [note.id, note])),
-    [notes],
-  );
   const activeFile =
     files.find((file) => file.path === activePath) ??
-    files.find((file) => file.path === openTabs[0]) ??
     null;
-  const stack = session.technologies
-    .map((technology) => technologyLabels[technology] ?? technology)
-    .join(" + ");
+  const activeName = activeFile ? activeFile.path.split("/").pop() : "";
+  const activeContent = activeFile
+    ? edits[activeFile.path] ?? activeFile.content
+    : "";
 
   // Always expose the latest code to the snapshot loop.
   const codeRef = useRef("");
@@ -233,7 +229,6 @@ export function InterviewWorkspace({
     }
   }
 
-  const live = status === "live";
   const dotColor =
     status === "live"
       ? "bg-[#4ade80]"
