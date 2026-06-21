@@ -64,7 +64,7 @@ Session stats:
 
 Return a JSON object with exactly these fields:
 {{
-  "summary": "2-3 sentence narrative for HR describing how the candidate performed overall",
+  "summary": "4-6 sentence narrative for HR covering technical depth, communication clarity, and problem-solving approach as distinct angles",
   "strengths": ["short phrase", ...],
   "gaps": ["short phrase", ...],
   "advance_recommend": true or false,
@@ -72,8 +72,8 @@ Return a JSON object with exactly these fields:
   "rubric_scores": [
     {{
       "question": "short question title matching the rubric heading, e.g. Q1: API Layer",
-      "score": "pass" or "partial" or "fail",
-      "reason": "one sentence explaining the score based on what the candidate actually said"
+      "score": <integer 0-4, where 0 = not reached/no evidence, 1 = far below expectations, 2 = partial understanding, 3 = meets expectations (equivalent to old "pass"), 4 = exceeds expectations with exceptional depth/clarity>,
+      "reason": "1-3 sentences citing specific evidence or direct quotes from the conversation that justify this score"
     }},
     ...
   ],
@@ -89,7 +89,7 @@ Return a JSON object with exactly these fields:
   ]
 }}
 
-For rubric_scores: score every question in the rubric using its Pass/Partial/Fail criteria. Base the score strictly on evidence from the conversation — what the candidate actually said, not what they should have said. If a rubric question was never reached, score it "fail" with reason "not reached in session".
+For rubric_scores: score every question in the rubric on the 0-4 scale, mapping the rubric's Pass/Partial/Fail criteria onto it (Pass ≈ 3-4, Partial ≈ 2, Fail ≈ 0-1). Base the score strictly on evidence from the conversation — what the candidate actually said, not what they should have said. If a rubric question was never reached, score it 0 with reason "not reached in session".
 For intent_map: include every meaningful candidate turn and key agent turns. Skip pure filler. Labels must be concise past-tense phrases like "explained the filter logic" or "got stuck on edge case". Do not copy these examples directly."""
 
     try:
@@ -108,6 +108,7 @@ For intent_map: include every meaningful candidate turn and key agent turns. Ski
             "gaps": [],
             "advance_recommend": False,
             "advance_reason": "Could not generate insights.",
+            "rubric_scores": [],
             "intent_map": [],
         }
 

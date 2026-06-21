@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import { AuthForm } from "@/components/auth/AuthForm";
 
 export const metadata: Metadata = {
-  title: "Auth | Chayote",
-  description: "Sign in or create a Chayote account.",
+  title: "Auth | Talkode",
+  description: "Sign in or create a Talkode account.",
 };
 
 export default function AuthPage() {

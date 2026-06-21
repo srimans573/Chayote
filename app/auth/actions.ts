@@ -20,7 +20,7 @@ function validateEmail(email: string) {
 function configurationError(): AuthFormState {
   return {
     message:
-      "Supabase is not configured yet. Add the public project URL and publishable key.",
+      "The database is not configured yet. Add the project URL and publishable key.",
     status: "error",
   };
 }
@@ -133,7 +133,7 @@ export async function signUp(
   const emailParts = email.split("@");
   const fallbackFullName = emailParts[0]?.replace(/[._-]+/g, " ").trim() || email;
   const fallbackCompanyName =
-    emailParts[1]?.replace(/[._-]+/g, " ").trim() || "Chayote";
+    emailParts[1]?.replace(/[._-]+/g, " ").trim() || "Talkode";
   const role = "recruiter" as const;
 
   let supabase: Awaited<ReturnType<typeof createClient>>;
@@ -181,7 +181,7 @@ export async function signUp(
 
   return {
     message:
-      "Account created, but Supabase did not return an active session. Check project auth settings to allow direct sign up.",
+      "Account created, but the server did not return an active session. Check auth settings to allow direct sign up.",
     status: "error",
   };
 }

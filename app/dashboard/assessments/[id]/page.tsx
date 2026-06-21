@@ -5,7 +5,7 @@ import { getAssessmentDetailsData } from "@/app/dashboard/data";
 import { CodebaseFilesModal } from "@/components/dashboard/CodebaseFilesModal";
 
 export const metadata: Metadata = {
-  title: "Assessment | Chayote",
+  title: "Assessment | Talkode",
 };
 
 type AssessmentDetailPageProps = {

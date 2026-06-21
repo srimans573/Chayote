@@ -5,7 +5,20 @@ import time
 import redis.asyncio as redis
 from openai import AsyncOpenAI
 
-client = AsyncOpenAI(api_key=os.environ.get("OPENAI_API_KEY", ""))
+try:
+    from thetokencompany.openai import with_compression
+except ImportError:  # SDK optional — fall back to a plain client
+    with_compression = None
+
+_openai_client = AsyncOpenAI(api_key=os.environ.get("OPENAI_API_KEY", ""))
+_ttc_key = os.environ.get("TTC_API_KEY", "")
+
+# Auto-compress prompts via The Token Company when TTC_API_KEY is configured.
+client = (
+    with_compression(_openai_client, compression_api_key=_ttc_key)
+    if _ttc_key and with_compression
+    else _openai_client
+)
 
 # Moment type phrase lists
 STUCK_PHRASES = ["i'm stuck", "im stuck", "i don't know", "i dont know", "not sure how", "don't know how", "no idea how"]

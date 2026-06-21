@@ -5,19 +5,35 @@ import {
   Bot,
   ChevronDown,
   Clock,
+  Code2,
+  Eye,
+  File as FileIconDefault,
+  FileCode,
+  FileJson,
+  FileText,
   Folder,
   Loader2,
   LogOut,
   MessageSquare,
   Mic,
+  Moon,
+  Plus,
+  StickyNote,
+  Sun,
+  Trash2,
+  VideoOff,
   X,
 } from "lucide-react";
+import { marked } from "marked";
 import type { CandidateAssessmentSession } from "@/app/assessment/actions";
 import type { CodebaseFile } from "@/app/dashboard/data";
 import { useInterviewSession } from "@/app/assessment/useInterviewSession";
+import { CodeEditor, type LineRange } from "@/app/assessment/CodeEditor";
 
 const TK_MONO =
   'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace';
+
+const THEME_STORAGE_KEY = "tk-theme";
 
 const technologyLabels: Record<string, string> = {
   python: "Python",
@@ -32,12 +48,89 @@ const workspaceCss = `
 .tk-wf:nth-child(3) { animation-delay: 0.4s; }
 .tk-wf:nth-child(4) { animation-delay: 0.6s; }
 .tk-wf:nth-child(5) { animation-delay: 0.8s; }
-.tk-scope { font-family: 'Inter', sans-serif; }
+.tk-scope {
+  font-family: 'Inter', sans-serif;
+  --tk-bg: #0d0e0f;
+  --tk-bg-elevated: #1b1c1c;
+  --tk-bg-panel: #121414;
+  --tk-bg-sidebar: #1f2020;
+  --tk-bg-hover: #292a2a;
+  --tk-border: #444746;
+  --tk-text: #e2e2e2;
+  --tk-text-muted: #c4c7c5;
+  --tk-text-dim: #8e918f;
+  --tk-text-faint: #5a5f57;
+  --tk-accent: #f5f5f4;
+  --tk-accent-hover: #ffffff;
+  --tk-accent-text-on: #0d0e0f;
+  --tk-accent-text-soft: #e2e2e2;
+  --tk-selection-bg: #3a3b3b;
+  --tk-selection-text: #f5f5f4;
+  --tk-danger: #ffb4ab;
+  --tk-danger-text-soft: #ffdad6;
+  --tk-danger-border: #93000a;
+  --tk-warning: #e5c07b;
+  --tk-rec-dot: #ff4d4d;
+  --tk-speaking-bg: #343535;
+  --tk-syntax-string: #e0af68;
+}
+.tk-scope[data-tk-theme="light"] {
+  --tk-bg: #f7f7f5;
+  --tk-bg-elevated: #ffffff;
+  --tk-bg-panel: #f1f1ee;
+  --tk-bg-sidebar: #ececea;
+  --tk-bg-hover: #e2e2de;
+  --tk-border: #d9d9d5;
+  --tk-text: #1c1e1c;
+  --tk-text-muted: #44473f;
+  --tk-text-dim: #6c6f64;
+  --tk-text-faint: #9a9d92;
+  --tk-accent: #1c1e1c;
+  --tk-accent-hover: #000000;
+  --tk-accent-text-on: #ffffff;
+  --tk-accent-text-soft: #1c1e1c;
+  --tk-selection-bg: #d9d9d5;
+  --tk-selection-text: #1c1e1c;
+  --tk-danger: #b3261e;
+  --tk-danger-text-soft: #7a160f;
+  --tk-danger-border: #b3261e;
+  --tk-warning: #92660a;
+  --tk-rec-dot: #d92d20;
+  --tk-speaking-bg: #ffffff;
+  --tk-syntax-string: #b45309;
+}
 .tk-mono { font-family: ${TK_MONO}; }
 .tk-scope ::-webkit-scrollbar { width: 8px; height: 8px; }
 .tk-scope ::-webkit-scrollbar-track { background: transparent; }
-.tk-scope ::-webkit-scrollbar-thumb { background: #444746; border-radius: 4px; }
-.tk-scope ::-webkit-scrollbar-thumb:hover { background: #8e918f; }
+.tk-scope ::-webkit-scrollbar-thumb { background: var(--tk-border); border-radius: 4px; }
+.tk-scope ::-webkit-scrollbar-thumb:hover { background: var(--tk-text-dim); }
+.tk-scope .token.comment { color: var(--tk-text-faint); }
+.tk-scope .token.keyword,
+.tk-scope .token.tag { color: #c792ea; }
+.tk-scope .token.string,
+.tk-scope .token.attr-value { color: var(--tk-syntax-string); }
+.tk-scope .token.function { color: #82aaff; }
+.tk-scope .token.number,
+.tk-scope .token.boolean { color: #f78c6c; }
+.tk-scope .token.punctuation { color: var(--tk-text-dim); }
+.tk-scope .token.class-name,
+.tk-scope .token.builtin { color: #ffcb6b; }
+.tk-scope .token.operator { color: var(--tk-text-muted); }
+.tk-markdown { line-height: 1.7; }
+.tk-markdown h1 { font-size: 1.5rem; font-weight: 800; margin: 0.6em 0 0.4em; }
+.tk-markdown h2 { font-size: 1.25rem; font-weight: 700; margin: 0.6em 0 0.4em; }
+.tk-markdown h3 { font-size: 1.1rem; font-weight: 700; margin: 0.5em 0 0.3em; }
+.tk-markdown p { margin: 0.5em 0; }
+.tk-markdown ul, .tk-markdown ol { margin: 0.4em 0 0.4em 1.4em; }
+.tk-markdown li { margin: 0.2em 0; }
+.tk-markdown a { color: var(--tk-accent); text-decoration: underline; }
+.tk-markdown code { font-family: ${TK_MONO}; background: var(--tk-bg-hover); padding: 0.1em 0.35em; border-radius: 4px; font-size: 0.85em; }
+.tk-markdown pre { background: var(--tk-bg-hover); padding: 0.75em 1em; border-radius: 6px; overflow-x: auto; margin: 0.6em 0; }
+.tk-markdown pre code { background: none; padding: 0; }
+.tk-markdown blockquote { border-left: 3px solid var(--tk-border); padding-left: 0.8em; color: var(--tk-text-dim); margin: 0.5em 0; }
+.tk-markdown hr { border-color: var(--tk-border); margin: 1em 0; }
+.tk-markdown table { border-collapse: collapse; margin: 0.6em 0; }
+.tk-markdown th, .tk-markdown td { border: 1px solid var(--tk-border); padding: 0.3em 0.6em; }
 `;
 
 type TreeNode = {
@@ -45,6 +138,15 @@ type TreeNode = {
   path: string;
   isDir: boolean;
   children: TreeNode[];
+};
+
+type Note = {
+  id: string;
+  filePath: string;
+  startLine: number;
+  endLine: number;
+  text: string;
+  createdAt: number;
 };
 
 function cx(...classes: Array<string | false | undefined>) {
@@ -86,20 +188,29 @@ function buildFileTree(files: CodebaseFile[]): TreeNode[] {
   return root.children;
 }
 
-function fileGlyph(name: string) {
-  if (name.endsWith(".json")) return "{}";
-  if (name.endsWith(".py")) return "py";
-  if (name.endsWith(".md")) return "md";
-  if (name.endsWith(".txt")) return "··";
-  return "<>";
+function FileGlyph({ name, className }: { name: string; className?: string }) {
+  if (name.endsWith(".json"))
+    return <FileJson className={cx(className, "text-[#eab308]")} />;
+  if (name.endsWith(".py"))
+    return <FileCode className={cx(className, "text-[#4b8bbe]")} />;
+  if (name.endsWith(".ts") || name.endsWith(".tsx"))
+    return <FileCode className={cx(className, "text-[#3b82f6]")} />;
+  if (name.endsWith(".js") || name.endsWith(".jsx"))
+    return <FileCode className={cx(className, "text-[#facc15]")} />;
+  if (name.endsWith(".css"))
+    return <FileCode className={cx(className, "text-[#06b6d4]")} />;
+  if (name.endsWith(".md") || name.endsWith(".txt"))
+    return <FileText className={cx(className, "text-[var(--tk-text-dim)]")} />;
+  return <FileIconDefault className={cx(className, "text-[var(--tk-text-dim)]")} />;
 }
 
 function initialSeconds(session: CandidateAssessmentSession) {
+  const cap = Math.max(0, session.timeLimitMinutes * 60);
   if (session.expiresAt) {
     const ms = new Date(session.expiresAt).getTime() - Date.now();
-    if (!Number.isNaN(ms)) return Math.max(0, Math.floor(ms / 1000));
+    if (!Number.isNaN(ms)) return Math.min(cap, Math.max(0, Math.floor(ms / 1000)));
   }
-  return Math.max(0, session.timeLimitMinutes * 60);
+  return cap;
 }
 
 function formatClock(total: number) {
@@ -124,6 +235,72 @@ function buildProblemStatement(session: CandidateAssessmentSession) {
   ].join("\n");
 }
 
+function getInitialTheme(): "dark" | "light" {
+  if (typeof window === "undefined") return "dark";
+  return window.localStorage.getItem(THEME_STORAGE_KEY) === "light" ? "light" : "dark";
+}
+
+function notesStorageKey(key: string) {
+  return `tk-notes:${key}`;
+}
+
+function loadNotes(key: string): Note[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(notesStorageKey(key));
+    return raw ? (JSON.parse(raw) as Note[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function SelfCameraPreview({
+  stream,
+  panelOpen,
+}: {
+  stream: MediaStream | null;
+  panelOpen: boolean;
+}) {
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+
+  useEffect(() => {
+    const videoEl = videoRef.current;
+    if (videoEl) videoEl.srcObject = stream;
+  }, [stream]);
+
+  return (
+    <div
+      className={cx(
+        "absolute bottom-4 z-40 h-28 w-40 overflow-hidden rounded-xl border-2 border-[var(--tk-border)] bg-[var(--tk-bg-elevated)] shadow-lg transition-[right]",
+        panelOpen ? "right-[25rem]" : "right-4",
+      )}
+    >
+      {stream ? (
+        <video
+          ref={videoRef}
+          autoPlay
+          muted
+          playsInline
+          className="h-full w-full -scale-x-100 object-cover"
+        />
+      ) : (
+        <div className="flex h-full w-full flex-col items-center justify-center gap-1 text-[var(--tk-text-dim)]">
+          <VideoOff className="h-5 w-5" />
+          <span className="text-[10px]">Camera unavailable</span>
+        </div>
+      )}
+      {stream ? (
+        <div className="absolute left-1.5 top-1.5 flex items-center gap-1 rounded bg-black/50 px-1.5 py-0.5">
+          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--tk-rec-dot)]" />
+          <span className="text-[10px] font-semibold tracking-wide text-white">
+            REC
+          </span>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export function InterviewWorkspace({
   session,
 }: {
@@ -131,6 +308,7 @@ export function InterviewWorkspace({
 }) {
   const files = session.codeFiles;
   const tree = useMemo(() => buildFileTree(files), [files]);
+  const notesKey = `${session.assessmentId}:${session.candidateName}`;
 
   const [activePath, setActivePath] = useState(files[0]?.path ?? "");
   const [edits, setEdits] = useState<Record<string, string>>({});
@@ -148,10 +326,35 @@ export function InterviewWorkspace({
     return open;
   });
   const [panelOpen, setPanelOpen] = useState(true);
+  const [rightTab, setRightTab] = useState<"interview" | "notes">("interview");
   const [secondsLeft, setSecondsLeft] = useState(() => initialSeconds(session));
+  const [theme, setTheme] = useState<"dark" | "light">(() => getInitialTheme());
+  const [notes, setNotes] = useState<Note[]>(() => loadNotes(notesKey));
+  const [selectionRange, setSelectionRange] = useState<LineRange | null>(null);
+  const [jumpTarget, setJumpTarget] = useState<LineRange | null>(null);
+  const [draftNote, setDraftNote] = useState("");
+  const [markdownPreview, setMarkdownPreview] = useState(true);
 
-  const { status, messages, interim, error, sessionId, speaking, interviewComplete, start, end } =
-    useInterviewSession();
+  useEffect(() => {
+    window.localStorage.setItem(notesStorageKey(notesKey), JSON.stringify(notes));
+  }, [notes, notesKey]);
+
+  useEffect(() => {
+    window.localStorage.setItem(THEME_STORAGE_KEY, theme);
+  }, [theme]);
+
+  const {
+    status,
+    messages,
+    interim,
+    error,
+    sessionId,
+    speaking,
+    interviewComplete,
+    cameraStream,
+    start,
+    end,
+  } = useInterviewSession();
 
   // Auto-end when agent signals all rubric areas are covered
   useEffect(() => {
@@ -165,6 +368,11 @@ export function InterviewWorkspace({
   const activeContent = activeFile
     ? edits[activeFile.path] ?? activeFile.content
     : "";
+  const isMarkdownFile = activeFile ? activeFile.path.endsWith(".md") : false;
+  const markdownHtml = useMemo(
+    () => (isMarkdownFile ? (marked.parse(activeContent) as string) : ""),
+    [isMarkdownFile, activeContent],
+  );
 
   // Always expose the latest code to the snapshot loop.
   const codeRef = useRef("");
@@ -187,13 +395,13 @@ export function InterviewWorkspace({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Countdown timer.
+  // Countdown timer, driven by the database-anchored expiry on `session`.
   useEffect(() => {
     const id = setInterval(() => {
-      setSecondsLeft((value) => (value <= 0 ? 0 : value - 1));
+      setSecondsLeft(initialSeconds(session));
     }, 1000);
     return () => clearInterval(id);
-  }, []);
+  }, [session]);
 
   // Auto-scroll the interview feed.
   const feedRef = useRef<HTMLDivElement | null>(null);
@@ -210,6 +418,36 @@ export function InterviewWorkspace({
     });
   }
 
+  function toggleTheme() {
+    setTheme((value) => (value === "dark" ? "light" : "dark"));
+  }
+
+  function addNote() {
+    if (!activeFile || !selectionRange || !draftNote.trim()) return;
+    const note: Note = {
+      id: crypto.randomUUID(),
+      filePath: activeFile.path,
+      startLine: selectionRange.startLine,
+      endLine: selectionRange.endLine,
+      text: draftNote.trim(),
+      createdAt: Date.now(),
+    };
+    setNotes((previous) => [note, ...previous]);
+    setDraftNote("");
+    setSelectionRange(null);
+  }
+
+  function deleteNote(id: string) {
+    setNotes((previous) => previous.filter((note) => note.id !== id));
+  }
+
+  function openNote(note: Note) {
+    setActivePath(note.filePath);
+    setJumpTarget({ startLine: note.startLine, endLine: note.endLine });
+    setPanelOpen(true);
+    setRightTab("notes");
+  }
+
   async function handleEnd() {
     if (status === "ending" || status === "ended") return;
     if (!window.confirm("End the assessment and submit for review?")) return;
@@ -222,10 +460,10 @@ export function InterviewWorkspace({
   const live = status === "live";
   const dotColor =
     status === "live"
-      ? "bg-[#4ade80]"
+      ? "bg-[var(--tk-accent)]"
       : status === "error"
-        ? "bg-[#ffb4ab]"
-        : "bg-[#e5c07b]";
+        ? "bg-[var(--tk-danger)]"
+        : "bg-[var(--tk-warning)]";
   const statusLabel =
     status === "live"
       ? "Recording"
@@ -251,15 +489,15 @@ export function InterviewWorkspace({
               type="button"
               onClick={() => toggleDir(node.path)}
               style={indent}
-              className="group flex w-full items-center space-x-2 rounded px-2 py-1.5 text-left text-[#c4c7c5] transition-colors hover:bg-[#292a2a]"
+              className="group flex w-full items-center space-x-2 rounded px-2 py-1 text-left text-[var(--tk-text-muted)] transition-colors hover:bg-[var(--tk-bg-hover)]"
             >
               <ChevronDown
                 className={cx(
-                  "h-4 w-4 shrink-0 text-[#8e918f] transition-transform group-hover:text-[#c4c7c5]",
+                  "h-4 w-4 shrink-0 text-[var(--tk-text-dim)] transition-transform group-hover:text-[var(--tk-text-muted)]",
                   !open && "-rotate-90",
                 )}
               />
-              <Folder className="h-4 w-4 shrink-0 text-[#8e918f]" />
+              <Folder className="h-4 w-4 shrink-0 text-[var(--tk-text-dim)]" />
               <span className="truncate">{node.name}</span>
             </button>
             {open ? renderNodes(node.children, depth + 1) : null}
@@ -275,29 +513,30 @@ export function InterviewWorkspace({
           onClick={() => setActivePath(node.path)}
           style={indent}
           className={cx(
-            "relative flex w-full items-center space-x-2 rounded px-2 py-1.5 text-left transition-colors",
+            "relative flex w-full items-center space-x-2 rounded px-2 py-1 text-left transition-colors",
             active
-              ? "bg-[#4ade80]/10 text-[#4ade80] before:absolute before:left-0 before:top-0 before:h-full before:w-[2px] before:bg-[#4ade80] before:content-['']"
-              : "text-[#c4c7c5] hover:bg-[#292a2a] hover:text-[#e2e2e2]",
+              ? "bg-[var(--tk-accent)]/10 text-[var(--tk-accent)] before:absolute before:left-0 before:top-0 before:h-full before:w-[2px] before:bg-[var(--tk-accent)] before:content-['']"
+              : "text-[var(--tk-text-muted)] hover:bg-[var(--tk-bg-hover)] hover:text-[var(--tk-text)]",
           )}
         >
-          <span className="tk-mono w-4 shrink-0 text-center text-xs font-bold">
-            {fileGlyph(node.name)}
-          </span>
+          <FileGlyph name={node.name} className="h-3.5 w-3.5 shrink-0" />
           <span className="truncate">{node.name}</span>
         </button>
       );
     });
 
   return (
-    <div className="tk-scope fixed inset-0 flex flex-col overflow-hidden bg-[#0d0e0f] text-[#e2e2e2] selection:bg-[#005321] selection:text-[#6efb9b]">
+    <div
+      data-tk-theme={theme}
+      className="tk-scope fixed inset-0 flex flex-col overflow-hidden bg-[var(--tk-bg)] text-[var(--tk-text)] selection:bg-[var(--tk-selection-bg)] selection:text-[var(--tk-selection-text)]"
+    >
       <style>{workspaceCss}</style>
 
       {/* AI Speaking Indicator */}
-      <div className="absolute top-4 left-1/2 z-50 flex -translate-x-1/2 items-center space-x-3 rounded-full border border-[#444746] bg-[#343535] px-4 py-2 shadow-lg">
+      <div className="absolute top-4 left-1/2 z-50 flex -translate-x-1/2 items-center space-x-3 rounded-full border border-[var(--tk-border)] bg-[var(--tk-speaking-bg)] px-4 py-2 shadow-lg">
         <div className="flex items-center space-x-2">
-          <div className={cx("h-2 w-2 rounded-full", speaking ? "bg-[#4ade80] animate-pulse" : dotColor)} />
-          <span className="text-xs font-medium uppercase tracking-wide text-[#e2e2e2]">
+          <div className={cx("h-2 w-2 rounded-full", speaking ? "bg-[var(--tk-accent)] animate-pulse" : dotColor)} />
+          <span className="text-xs font-medium uppercase tracking-wide text-[var(--tk-text)]">
             {speaking ? "AI Speaking" : "AI Interviewer"}
           </span>
         </div>
@@ -305,26 +544,36 @@ export function InterviewWorkspace({
           {[8, 12, 16, 10, 6].map((height, index) => (
             <div
               key={index}
-              className={cx("w-1 rounded-full bg-[#4ade80]", speaking && "tk-wf")}
+              className={cx("w-1 rounded-full bg-[var(--tk-accent)]", speaking && "tk-wf")}
               style={{ height: speaking ? `${height}px` : "4px" }}
             />
           ))}
         </div>
       </div>
 
+      <SelfCameraPreview stream={cameraStream} panelOpen={panelOpen} />
+
       {/* Main Header */}
-      <header className="flex shrink-0 items-center justify-between border-b border-[#444746] bg-[#121414] px-6 py-3">
-        <div className="flex min-w-0 items-center space-x-4">
-          <div className="text-xl font-bold tracking-tight text-[#e2e2e2]">TALKODE</div>
-          <div className="h-4 w-px bg-[#444746]" />
-          <div className="truncate text-xs font-medium uppercase tracking-widest text-[#c4c7c5]">
+      <header className="flex shrink-0 items-center justify-between border-b border-[var(--tk-border)] bg-[var(--tk-bg-panel)] px-5 py-2">
+        <div className="flex min-w-0 items-center space-x-3">
+          <div className="text-base font-bold tracking-tight text-[var(--tk-text)]">talkode</div>
+          <div className="h-3.5 w-px bg-[var(--tk-border)]" />
+          <div className="truncate text-[11px] font-medium uppercase tracking-widest text-[var(--tk-text-muted)]">
             {session.title}
           </div>
         </div>
-        <div className="flex items-center space-x-4">
-          <div className="flex items-center space-x-2 rounded-md border border-[#444746] bg-[#1b1c1c] px-3 py-1.5">
-            <Clock className="h-4 w-4 text-[#c4c7c5]" />
-            <span className="tk-mono text-sm font-semibold text-[#e2e2e2]">
+        <div className="flex items-center space-x-2.5">
+          <button
+            type="button"
+            onClick={toggleTheme}
+            aria-label="Toggle theme"
+            className="flex items-center justify-center rounded-md border border-[var(--tk-border)] bg-[var(--tk-bg-elevated)] p-1.5 text-[var(--tk-text-muted)] transition-colors hover:text-[var(--tk-text)]"
+          >
+            {theme === "dark" ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
+          </button>
+          <div className="flex items-center space-x-1.5 rounded-md border border-[var(--tk-border)] bg-[var(--tk-bg-elevated)] px-2.5 py-1">
+            <Clock className="h-3.5 w-3.5 text-[var(--tk-text-muted)]" />
+            <span className="tk-mono text-xs font-semibold text-[var(--tk-text)]">
               {formatClock(secondsLeft)}
             </span>
           </div>
@@ -332,10 +581,10 @@ export function InterviewWorkspace({
             type="button"
             onClick={handleEnd}
             disabled={status === "ending" || status === "ended"}
-            className="flex items-center space-x-2 rounded-md px-3 py-1.5 text-sm font-semibold text-[#ffb4ab] transition-colors hover:bg-[#93000a]/10 hover:text-[#ffdad6] disabled:opacity-50"
+            className="flex items-center space-x-1.5 rounded-md px-2.5 py-1 text-xs font-semibold text-[var(--tk-danger)] transition-colors hover:bg-[var(--tk-danger-border)]/10 hover:text-[var(--tk-danger-text-soft)] disabled:opacity-50"
           >
-            <LogOut className="h-4 w-4" />
-            <span>END SESSION</span>
+            <LogOut className="h-3.5 w-3.5" />
+            <span>End session</span>
           </button>
         </div>
       </header>
@@ -343,135 +592,307 @@ export function InterviewWorkspace({
       {/* Main Content Area */}
       <main className="flex flex-1 overflow-hidden">
         {/* File Explorer Sidebar */}
-        <aside className="flex w-64 shrink-0 flex-col border-r border-[#444746] bg-[#1f2020]">
-          <div className="flex items-center justify-between border-b border-[#444746] p-4 text-xs font-semibold uppercase tracking-wider text-[#c4c7c5]">
-            <span>Codebase</span>
-            <Folder className="h-4 w-4" />
+        <aside className="flex w-64 shrink-0 flex-col border-r border-[var(--tk-border)] bg-[var(--tk-bg-sidebar)]">
+          <div className="flex flex-col gap-1 border-b border-[var(--tk-border)] p-4">
+            <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-wider text-[var(--tk-text-muted)]">
+              <span>Codebase</span>
+              <Folder className="h-4 w-4" />
+            </div>
+            <span className="truncate text-[11px] text-[var(--tk-text-faint)]">
+              {session.title}
+            </span>
           </div>
           <div className="tk-mono flex-1 overflow-y-auto p-2 text-sm">
             {files.length > 0 ? (
               renderNodes(tree, 0)
             ) : (
-              <p className="px-2 py-2 text-[#8e918f]">No files loaded.</p>
+              <p className="px-2 py-2 text-[var(--tk-text-dim)]">No files loaded.</p>
             )}
           </div>
         </aside>
 
         {/* Code Editor */}
-        <section className="flex min-w-0 flex-1 flex-col bg-[#0d0e0f]">
-          <div className="flex h-12 shrink-0 items-center justify-between border-b border-[#444746] bg-[#1b1c1c] px-4">
+        <section className="flex min-w-0 flex-1 flex-col bg-[var(--tk-bg)]">
+          <div className="flex h-10 shrink-0 items-center justify-between border-b border-[var(--tk-border)] bg-[var(--tk-bg-elevated)] px-3">
             <div className="flex h-full items-center">
-              <div className="tk-mono flex h-full items-center border-b-2 border-[#4ade80] bg-[#0d0e0f] px-4 text-sm text-[#4ade80]">
+              <div className="tk-mono flex h-full items-center border-b-2 border-[var(--tk-accent)] bg-[var(--tk-bg)] px-3 text-xs text-[var(--tk-accent)]">
                 {activeName || "No file"}
               </div>
             </div>
-            <button
-              type="button"
-              onClick={() => setPanelOpen((value) => !value)}
-              className={cx(
-                "flex items-center space-x-2 rounded border px-3 py-1.5 text-xs font-semibold transition-colors",
-                panelOpen
-                  ? "border-[#4ade80] bg-[#4ade80]/10 text-[#4ade80]"
-                  : "border-[#4ade80]/30 text-[#4ade80] hover:bg-[#4ade80]/10",
-              )}
-            >
-              <MessageSquare className="h-3 w-3" />
-              <span>TOGGLE INTERVIEW</span>
-            </button>
+            <div className="flex items-center gap-1.5">
+              {isMarkdownFile ? (
+                <div className="flex items-center rounded border border-[var(--tk-border)] p-0.5">
+                  <button
+                    type="button"
+                    onClick={() => setMarkdownPreview(false)}
+                    className={cx(
+                      "flex items-center gap-1 rounded px-2 py-0.5 text-[11px] font-semibold transition-colors",
+                      !markdownPreview
+                        ? "bg-[var(--tk-bg-hover)] text-[var(--tk-text)]"
+                        : "text-[var(--tk-text-dim)] hover:text-[var(--tk-text-muted)]",
+                    )}
+                  >
+                    <Code2 className="h-3 w-3" /> Code
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMarkdownPreview(true)}
+                    className={cx(
+                      "flex items-center gap-1 rounded px-2 py-0.5 text-[11px] font-semibold transition-colors",
+                      markdownPreview
+                        ? "bg-[var(--tk-bg-hover)] text-[var(--tk-text)]"
+                        : "text-[var(--tk-text-dim)] hover:text-[var(--tk-text-muted)]",
+                    )}
+                  >
+                    <Eye className="h-3 w-3" /> Preview
+                  </button>
+                </div>
+              ) : null}
+              {selectionRange ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPanelOpen(true);
+                    setRightTab("notes");
+                  }}
+                  className="flex items-center gap-1.5 rounded border border-[var(--tk-accent)]/40 px-2 py-0.5 text-[11px] font-semibold text-[var(--tk-accent)] transition-colors hover:bg-[var(--tk-accent)]/10"
+                >
+                  <Plus className="h-3 w-3" />
+                  <span>
+                    Note (lines {selectionRange.startLine}
+                    {selectionRange.endLine !== selectionRange.startLine
+                      ? `-${selectionRange.endLine}`
+                      : ""}
+                    )
+                  </span>
+                </button>
+              ) : null}
+              <button
+                type="button"
+                onClick={() => setPanelOpen((value) => !value)}
+                className={cx(
+                  "flex items-center space-x-1.5 rounded border px-2 py-0.5 text-[11px] font-semibold transition-colors",
+                  panelOpen
+                    ? "border-[var(--tk-accent)] bg-[var(--tk-accent)]/10 text-[var(--tk-accent)]"
+                    : "border-[var(--tk-accent)]/30 text-[var(--tk-accent)] hover:bg-[var(--tk-accent)]/10",
+                )}
+              >
+                <MessageSquare className="h-3 w-3" />
+                <span>Toggle panel</span>
+              </button>
+            </div>
           </div>
-          {activeFile ? (
-            <textarea
+          {activeFile && isMarkdownFile && markdownPreview ? (
+            <div
+              className="tk-markdown flex-1 overflow-y-auto p-6 text-[15px] text-[var(--tk-text)]"
+              dangerouslySetInnerHTML={{ __html: markdownHtml }}
+            />
+          ) : activeFile ? (
+            <CodeEditor
               value={activeContent}
-              onChange={(event) =>
+              onChange={(value) =>
                 setEdits((prev) => ({
                   ...prev,
-                  [activeFile.path]: event.target.value,
+                  [activeFile.path]: value,
                 }))
               }
-              spellCheck={false}
-              wrap="off"
-              className="tk-mono flex-1 resize-none whitespace-pre bg-[#0d0e0f] p-6 text-sm leading-relaxed text-[#c4c7c5] outline-none"
+              filePath={activeFile.path}
+              highlightRange={jumpTarget}
+              onSelectionLinesChange={setSelectionRange}
             />
           ) : (
-            <div className="tk-mono flex-1 p-6 text-sm text-[#8e918f]">
+            <div className="tk-mono flex-1 p-6 text-sm text-[var(--tk-text-dim)]">
               No file selected.
             </div>
           )}
         </section>
 
-        {/* Interview Panel */}
+        {/* Right Sidebar: Interview / Notes */}
         {panelOpen ? (
-          <aside className="flex w-96 shrink-0 flex-col border-l border-[#444746] bg-[#121414]">
-            <div className="flex items-center justify-between border-b border-[#444746] px-4 py-3">
-              <span className="text-xs font-semibold uppercase tracking-wider text-[#c4c7c5]">
-                Interview
-              </span>
-              <div className="flex items-center gap-2">
-                <span
+          <aside className="flex w-96 shrink-0 flex-col border-l border-[var(--tk-border)] bg-[var(--tk-bg-panel)]">
+            <div className="flex items-center justify-between border-b border-[var(--tk-border)] px-2 py-2">
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => setRightTab("interview")}
                   className={cx(
-                    "flex items-center gap-1.5 text-xs font-medium",
-                    status === "error" ? "text-[#ffb4ab]" : "text-[#8e918f]",
+                    "flex items-center gap-1.5 rounded px-2.5 py-1.5 text-xs font-semibold uppercase tracking-wider transition-colors",
+                    rightTab === "interview"
+                      ? "bg-[var(--tk-bg-hover)] text-[var(--tk-text)]"
+                      : "text-[var(--tk-text-dim)] hover:text-[var(--tk-text-muted)]",
                   )}
                 >
-                  <span className={cx("h-1.5 w-1.5 rounded-full", dotColor)} />
-                  {statusLabel}
-                </span>
+                  <MessageSquare className="h-3.5 w-3.5" />
+                  Interview
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRightTab("notes")}
+                  className={cx(
+                    "flex items-center gap-1.5 rounded px-2.5 py-1.5 text-xs font-semibold uppercase tracking-wider transition-colors",
+                    rightTab === "notes"
+                      ? "bg-[var(--tk-bg-hover)] text-[var(--tk-text)]"
+                      : "text-[var(--tk-text-dim)] hover:text-[var(--tk-text-muted)]",
+                  )}
+                >
+                  <StickyNote className="h-3.5 w-3.5" />
+                  Notes{notes.length > 0 ? ` (${notes.length})` : ""}
+                </button>
+              </div>
+              <div className="flex items-center gap-2 pr-1">
+                {rightTab === "interview" ? (
+                  <span
+                    className={cx(
+                      "flex items-center gap-1.5 text-xs font-medium",
+                      status === "error" ? "text-[var(--tk-danger)]" : "text-[var(--tk-text-dim)]",
+                    )}
+                  >
+                    <span className={cx("h-1.5 w-1.5 rounded-full", dotColor)} />
+                    {statusLabel}
+                  </span>
+                ) : null}
                 <button
                   type="button"
                   onClick={() => setPanelOpen(false)}
-                  className="text-[#8e918f] transition-colors hover:text-[#e2e2e2]"
-                  aria-label="Close interview panel"
+                  className="text-[var(--tk-text-dim)] transition-colors hover:text-[var(--tk-text)]"
+                  aria-label="Close panel"
                 >
                   <X className="h-4 w-4" />
                 </button>
               </div>
             </div>
 
-            <div ref={feedRef} className="flex-1 space-y-3 overflow-y-auto p-4">
-              {messages.length === 0 && status === "connecting" ? (
-                <p className="flex items-center gap-2 text-sm text-[#8e918f]">
-                  <Loader2 className="h-4 w-4 animate-spin" /> Connecting to the
-                  interviewer…
-                </p>
-              ) : null}
+            {rightTab === "interview" ? (
+              <>
+                <div ref={feedRef} className="flex-1 space-y-3 overflow-y-auto p-4">
+                  {messages.length === 0 && status === "connecting" ? (
+                    <p className="flex items-center gap-2 text-sm text-[var(--tk-text-dim)]">
+                      <Loader2 className="h-4 w-4 animate-spin" /> Connecting to the
+                      interviewer…
+                    </p>
+                  ) : null}
 
-              {messages.map((message) =>
-                message.role === "agent" ? (
-                  <div key={message.id} className="flex gap-2">
-                    <Bot className="mt-0.5 h-4 w-4 shrink-0 text-[#4ade80]" />
-                    <div className="rounded-lg rounded-tl-none border border-[#444746] bg-[#1b1c1c] px-3 py-2 text-sm leading-relaxed text-[#e2e2e2] whitespace-pre-wrap">
-                      {message.text}
+                  {messages.map((message) =>
+                    message.role === "agent" ? (
+                      <div key={message.id} className="flex gap-2">
+                        <Bot className="mt-0.5 h-4 w-4 shrink-0 text-[var(--tk-accent)]" />
+                        <div className="rounded-lg rounded-tl-none border border-[var(--tk-border)] bg-[var(--tk-bg-elevated)] px-3 py-2 text-sm leading-relaxed text-[var(--tk-text)] whitespace-pre-wrap">
+                          {message.text}
+                        </div>
+                      </div>
+                    ) : (
+                      <div key={message.id} className="flex justify-end gap-2">
+                        <div className="rounded-lg rounded-tr-none bg-[var(--tk-accent)]/10 px-3 py-2 text-sm leading-relaxed text-[var(--tk-accent-text-soft)] whitespace-pre-wrap">
+                          {message.text}
+                        </div>
+                        <Mic className="mt-0.5 h-4 w-4 shrink-0 text-[var(--tk-text-dim)]" />
+                      </div>
+                    ),
+                  )}
+
+                  {interim ? (
+                    <div className="flex justify-end gap-2">
+                      <div className="rounded-lg rounded-tr-none border border-dashed border-[var(--tk-border)] px-3 py-2 text-sm italic text-[var(--tk-text-dim)]">
+                        {interim}
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+
+                {error ? (
+                  <div className="border-t border-[var(--tk-danger-border)]/40 bg-[var(--tk-danger-border)]/10 px-4 py-2 text-xs text-[var(--tk-danger)]">
+                    {error}
+                  </div>
+                ) : null}
+
+                <div className="border-t border-[var(--tk-border)] px-4 py-2 text-[11px] text-[var(--tk-text-faint)]">
+                  {sessionId ? `Session ${sessionId.slice(0, 8)} · ` : ""}Speak
+                  naturally — the interviewer responds when you pause.
+                </div>
+              </>
+            ) : (
+              <div className="flex-1 space-y-3 overflow-y-auto p-4">
+                {selectionRange && activeFile ? (
+                  <div className="rounded-lg border border-[var(--tk-border)] bg-[var(--tk-bg-elevated)] p-3">
+                    <div className="mb-2 text-xs font-semibold text-[var(--tk-accent)]">
+                      + Note (lines {selectionRange.startLine}
+                      {selectionRange.endLine !== selectionRange.startLine
+                        ? `-${selectionRange.endLine}`
+                        : ""}
+                      )
+                    </div>
+                    <textarea
+                      value={draftNote}
+                      onChange={(event) => setDraftNote(event.target.value)}
+                      placeholder="What do you want to remember about this?"
+                      rows={3}
+                      className="tk-mono w-full resize-none rounded border border-[var(--tk-border)] bg-[var(--tk-bg)] p-2 text-xs text-[var(--tk-text)] outline-none"
+                    />
+                    <div className="mt-2 flex justify-end gap-3">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectionRange(null);
+                          setDraftNote("");
+                        }}
+                        className="text-xs text-[var(--tk-text-dim)] hover:text-[var(--tk-text-muted)]"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={addNote}
+                        disabled={!draftNote.trim()}
+                        className="rounded bg-[var(--tk-accent)] px-2.5 py-1 text-xs font-semibold text-[var(--tk-accent-text-on)] transition-colors hover:bg-[var(--tk-accent-hover)] disabled:opacity-50"
+                      >
+                        Save note
+                      </button>
                     </div>
                   </div>
                 ) : (
-                  <div key={message.id} className="flex justify-end gap-2">
-                    <div className="rounded-lg rounded-tr-none bg-[#4ade80]/10 px-3 py-2 text-sm leading-relaxed text-[#d7ffe5] whitespace-pre-wrap">
-                      {message.text}
+                  <p className="text-xs text-[var(--tk-text-dim)]">
+                    Highlight a range of lines in the editor, then use the
+                    “+ Note” button to save a note referencing that range.
+                  </p>
+                )}
+
+                {notes.length === 0 ? (
+                  <p className="text-xs text-[var(--tk-text-faint)]">No notes yet.</p>
+                ) : (
+                  notes.map((note) => (
+                    <div
+                      key={note.id}
+                      className="rounded-lg border border-[var(--tk-border)] bg-[var(--tk-bg-elevated)] p-3 transition-colors hover:border-[var(--tk-accent)]"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => openNote(note)}
+                        className="flex w-full items-center justify-between text-left"
+                      >
+                        <span className="tk-mono text-[11px] font-semibold text-[var(--tk-accent)]">
+                          {note.filePath.split("/").pop()} · L{note.startLine}
+                          {note.endLine !== note.startLine ? `-${note.endLine}` : ""}
+                        </span>
+                        <Trash2
+                          className="h-3.5 w-3.5 shrink-0 text-[var(--tk-text-dim)] transition-colors hover:text-[var(--tk-danger)]"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            deleteNote(note.id);
+                          }}
+                        />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => openNote(note)}
+                        className="mt-1 block w-full text-left text-xs text-[var(--tk-text-muted)] whitespace-pre-wrap"
+                      >
+                        {note.text}
+                      </button>
                     </div>
-                    <Mic className="mt-0.5 h-4 w-4 shrink-0 text-[#8e918f]" />
-                  </div>
-                ),
-              )}
-
-              {interim ? (
-                <div className="flex justify-end gap-2">
-                  <div className="rounded-lg rounded-tr-none border border-dashed border-[#444746] px-3 py-2 text-sm italic text-[#8e918f]">
-                    {interim}
-                  </div>
-                </div>
-              ) : null}
-            </div>
-
-            {error ? (
-              <div className="border-t border-[#93000a]/40 bg-[#93000a]/10 px-4 py-2 text-xs text-[#ffb4ab]">
-                {error}
+                  ))
+                )}
               </div>
-            ) : null}
-
-            <div className="border-t border-[#444746] px-4 py-2 text-[11px] text-[#5a5f57]">
-              {sessionId ? `Session ${sessionId.slice(0, 8)} · ` : ""}Speak
-              naturally — the interviewer responds when you pause.
-            </div>
+            )}
           </aside>
         ) : null}
       </main>
@@ -479,34 +900,34 @@ export function InterviewWorkspace({
       {/* Submit overlay */}
       {status === "ending" || status === "ended" ? (
         <div className="absolute inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm">
-          <div className="w-[420px] max-w-[90vw] rounded-xl border border-[#444746] bg-[#1b1c1c] p-8 text-center">
+          <div className="w-[420px] max-w-[90vw] rounded-xl border border-[var(--tk-border)] bg-[var(--tk-bg-elevated)] p-8 text-center">
             {status === "ending" ? (
               <>
-                <Loader2 className="mx-auto h-8 w-8 animate-spin text-[#4ade80]" />
-                <h2 className="mt-4 text-lg font-bold text-[#e2e2e2]">
+                <Loader2 className="mx-auto h-8 w-8 animate-spin text-[var(--tk-accent)]" />
+                <h2 className="mt-4 text-lg font-bold text-[var(--tk-text)]">
                   Submitting your interview…
                 </h2>
-                <p className="mt-2 text-sm text-[#8e918f]">
+                <p className="mt-2 text-sm text-[var(--tk-text-dim)]">
                   Uploading the recording and starting analysis. Please keep this
                   tab open.
                 </p>
               </>
             ) : (
               <>
-                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[#4ade80]/15 text-[#4ade80]">
+                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[var(--tk-accent)]/15 text-[var(--tk-accent)]">
                   ✓
                 </div>
-                <h2 className="mt-4 text-lg font-bold text-[#e2e2e2]">
+                <h2 className="mt-4 text-lg font-bold text-[var(--tk-text)]">
                   Interview submitted
                 </h2>
-                <p className="mt-2 text-sm text-[#8e918f]">
+                <p className="mt-2 text-sm text-[var(--tk-text-dim)]">
                   Your session is being processed. The recruiter will see your
                   results on their dashboard.
                 </p>
                 <button
                   type="button"
                   onClick={() => window.location.reload()}
-                  className="mt-6 rounded-md bg-[#4ade80] px-4 py-2 text-sm font-semibold text-[#003914] transition-colors hover:bg-[#3ccb6f]"
+                  className="mt-6 rounded-md bg-[var(--tk-accent)] px-4 py-2 text-sm font-semibold text-[var(--tk-accent-text-on)] transition-colors hover:bg-[var(--tk-accent-hover)]"
                 >
                   Return to lobby
                 </button>

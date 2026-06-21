@@ -43,6 +43,7 @@ export type DashboardAssessment = {
 
 export type DashboardCandidate = {
   activityLabel: string;
+  assessmentTitle: string;
   id: string;
   name: string;
   risk: CandidateRisk;
@@ -172,11 +173,15 @@ function formatAssessment(row: AssessmentRow): DashboardAssessment {
   };
 }
 
-function formatCandidate(row: CandidateRow): DashboardCandidate {
+function formatCandidate(
+  row: CandidateRow,
+  assessmentTitleById: Record<string, string>,
+): DashboardCandidate {
   return {
     activityLabel: row.last_activity_at
       ? formatDate(row.last_activity_at)
       : formatDate(row.updated_at),
+    assessmentTitle: assessmentTitleById[row.assessment_id ?? ""] ?? row.role_name,
     id: row.id,
     name: row.full_name,
     risk: row.risk,
@@ -255,7 +260,7 @@ async function getProfile() {
     return {
       data: null,
       error:
-        "Supabase is not configured. Add the project URL and publishable key.",
+        "The database is not configured. Add the project URL and publishable key.",
     };
   }
 
@@ -332,13 +337,16 @@ export async function getDashboardData(): Promise<DashboardData> {
 
   const candidates = candidatesResult.data ?? [];
   const candidateCounts = countCandidatesByAssessment(candidates);
+  const assessmentTitleById = Object.fromEntries(
+    (assessmentsResult.data ?? []).map((assessment) => [assessment.id, assessment.title]),
+  );
 
   return {
     assessments: (assessmentsResult.data ?? []).map((assessment) => ({
       ...formatAssessment(assessment),
       candidateCount: candidateCounts[assessment.id] ?? 0,
     })),
-    candidates: candidates.map(formatCandidate),
+    candidates: candidates.map((candidate) => formatCandidate(candidate, assessmentTitleById)),
     profile,
   };
 }
@@ -358,6 +366,24 @@ export async function getCandidatesData() {
   return {
     candidates: dashboardData.candidates,
     error: dashboardData.error,
+  };
+}
+
+export async function getCandidateDetailsData(candidateId: string): Promise<{
+  candidate: DashboardCandidate | null;
+  error?: string;
+}> {
+  const dashboardData = await getDashboardData();
+
+  if (dashboardData.error) {
+    return { candidate: null, error: dashboardData.error };
+  }
+
+  const candidate = dashboardData.candidates.find((c) => c.id === candidateId) ?? null;
+
+  return {
+    candidate,
+    error: candidate ? undefined : "Candidate not found.",
   };
 }
 

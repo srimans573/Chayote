@@ -9,7 +9,7 @@ const plusJakartaSans = Plus_Jakarta_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "Chayote",
+  title: "Talkode",
   description: "Recruiter access for AI-guided technical screening.",
 };
 

@@ -89,7 +89,7 @@ function EntryStep({
     <section className="grid min-h-screen bg-white px-4 py-8 sm:px-8 lg:grid-cols-[1fr_420px] lg:gap-8 lg:px-12">
       <div className="flex max-w-[720px] flex-col justify-center">
         <h1 className="text-[46px] font-black leading-none text-[#202322] sm:text-[58px]">
-          Chayote
+          Talkode
         </h1>
         <p className="mt-5 max-w-[620px] text-lg leading-8 text-[#3f443b]">
           Enter your assessment code and full name to prepare your environment

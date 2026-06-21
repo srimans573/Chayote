@@ -1,4 +1,4 @@
-// Client for the Chayote voice-agent backend (FastAPI, default http://localhost:8000).
+// Client for the Talkode voice-agent backend (FastAPI, default http://localhost:8000).
 // CORS is open on the backend, so these run directly from the browser.
 
 export const VOICE_API_BASE = (
@@ -26,21 +26,6 @@ export type BackendSession = {
   started_at: string;
   ended_at?: string | null;
   status: string;
-};
-
-export type TimelineEvent = {
-  type:
-    | "stuck"
-    | "hint_request"
-    | "decision"
-    | "self_correction"
-    | "arch_justification"
-    | "agent_response"
-    | string;
-  t_start: number;
-  t_end: number;
-  quote: string;
-  label: string;
 };
 
 // WebSocket messages the backend pushes to the browser.
@@ -104,6 +89,29 @@ export async function endSession(
   return asJson(res, "endSession");
 }
 
+export async function uploadInterviewVideo(
+  sessionId: string,
+  video: Blob,
+): Promise<{ stored: boolean }> {
+  const form = new FormData();
+  form.append("video", video, "session.webm");
+  const res = await fetch(`${VOICE_API_BASE}/session/${sessionId}/video`, {
+    method: "POST",
+    body: form,
+  });
+  return asJson(res, "uploadInterviewVideo");
+}
+
+export async function getSessionVideo(
+  sessionId: string,
+): Promise<{ video_url: string | null }> {
+  const res = await fetch(
+    `${VOICE_API_BASE}/dashboard/session/${sessionId}/video`,
+    { cache: "no-store" },
+  );
+  return asJson(res, "getSessionVideo");
+}
+
 export async function listSessions(): Promise<{ sessions: BackendSession[] }> {
   const res = await fetch(`${VOICE_API_BASE}/dashboard/sessions`, {
     cache: "no-store",
@@ -111,24 +119,21 @@ export async function listSessions(): Promise<{ sessions: BackendSession[] }> {
   return asJson(res, "listSessions");
 }
 
-export async function getEvents(
-  sessionId: string,
-): Promise<{ session_id: string; events: TimelineEvent[] }> {
-  const res = await fetch(
-    `${VOICE_API_BASE}/dashboard/session/${sessionId}/events`,
-    { cache: "no-store" },
-  );
-  return asJson(res, "getEvents");
-}
+export type TranscriptTurn = {
+  role: "agent" | "candidate";
+  text: string;
+  ts: number;
+  intent?: string;
+};
 
-export async function getTimeline(
+export async function getTranscript(
   sessionId: string,
-): Promise<{ session_id: string; timeline: unknown }> {
+): Promise<{ session_id: string; transcript: TranscriptTurn[] }> {
   const res = await fetch(
-    `${VOICE_API_BASE}/dashboard/session/${sessionId}/timeline`,
+    `${VOICE_API_BASE}/dashboard/session/${sessionId}/transcript`,
     { cache: "no-store" },
   );
-  return asJson(res, "getTimeline");
+  return asJson(res, "getTranscript");
 }
 
 export type IntentMoment = {
@@ -141,7 +146,7 @@ export type IntentMoment = {
 
 export type RubricScore = {
   question: string;
-  score: "pass" | "partial" | "fail";
+  score: number;
   reason: string;
 };
 

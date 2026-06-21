@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 load_dotenv()
 
 from services.redis_client import ping
-from routers import session, interview, snapshot, session_end, dashboard
+from routers import session, interview, snapshot, session_end, dashboard, video
 
 
 @asynccontextmanager
@@ -19,7 +19,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="Chayote Voice Agent API", lifespan=lifespan)
+app = FastAPI(title="Talkode Voice Agent API", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -34,6 +34,7 @@ app.include_router(interview.router)
 app.include_router(snapshot.router)
 app.include_router(session_end.router)
 app.include_router(dashboard.router)
+app.include_router(video.router)
 
 
 @app.get("/health")

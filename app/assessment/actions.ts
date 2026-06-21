@@ -84,7 +84,7 @@ export async function joinAssessment(
 
   if (!hasSupabaseConfig()) {
     return {
-      message: "Supabase is not configured yet.",
+      message: "The database is not configured yet.",
       status: "error",
     };
   }

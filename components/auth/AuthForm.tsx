@@ -132,7 +132,7 @@ export function AuthForm() {
   return (
     <section className="w-full max-w-85 border border-line bg-panel px-5 py-6">
       <div className="mb-5">
-        <span className="text-base font-semibold text-secondary">chayote</span>
+        <span className="text-base font-semibold text-secondary">talkode</span>
       </div>
 
       <div className="mb-4 grid grid-cols-2 border border-line p-1">

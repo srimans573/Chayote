@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { CandidateAssessmentFlow } from "@/app/assessment/CandidateAssessmentFlow";
 
 export const metadata: Metadata = {
-  title: "Assessment Lobby | Chayote",
+  title: "Assessment Lobby | Talkode",
   description: "Enter an assessment code and prepare your equipment.",
 };
 

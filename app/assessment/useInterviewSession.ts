@@ -5,6 +5,7 @@ import {
   createSession,
   endSession,
   postSnapshot,
+  uploadInterviewVideo,
   voiceWsBase,
   type CreateSessionBody,
   type InterviewServerMessage,
@@ -69,6 +70,18 @@ function pickRecorderMime(): string | undefined {
   return undefined;
 }
 
+function pickVideoRecorderMime(): string | undefined {
+  if (typeof MediaRecorder === "undefined") return undefined;
+  for (const type of [
+    "video/webm;codecs=vp9,opus",
+    "video/webm;codecs=vp8,opus",
+    "video/webm",
+  ]) {
+    if (MediaRecorder.isTypeSupported(type)) return type;
+  }
+  return undefined;
+}
+
 export function useInterviewSession() {
   const [status, setStatus] = useState<InterviewStatus>("idle");
   const [messages, setMessages] = useState<FeedMessage[]>([]);
@@ -77,6 +90,7 @@ export function useInterviewSession() {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [speaking, setSpeaking] = useState(false);
   const [interviewComplete, setInterviewComplete] = useState(false);
+  const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
 
   const streamRef = useRef<MediaStream | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
@@ -84,6 +98,9 @@ export function useInterviewSession() {
   const wsRef = useRef<WebSocket | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
+  const videoStreamRef = useRef<MediaStream | null>(null);
+  const videoRecorderRef = useRef<MediaRecorder | null>(null);
+  const videoChunksRef = useRef<Blob[]>([]);
   const snapshotTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const getCodeRef = useRef<() => string>(() => "");
   const startedRef = useRef(false);
@@ -113,6 +130,9 @@ export function useInterviewSession() {
     wsRef.current = null;
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
+    videoStreamRef.current?.getTracks().forEach((track) => track.stop());
+    videoStreamRef.current = null;
+    setCameraStream(null);
   }, []);
 
   const start = useCallback(
@@ -182,6 +202,34 @@ export function useInterviewSession() {
           if (event.data.size > 0) chunksRef.current.push(event.data);
         };
         recorder.start(1000);
+
+        // Camera capture for the live self-preview + full-session video recording.
+        // Best-effort: a denied/unavailable camera must never block the interview.
+        try {
+          const videoStream = await navigator.mediaDevices.getUserMedia({
+            video: { width: 640, height: 480, facingMode: "user" },
+          });
+          videoStreamRef.current = videoStream;
+          setCameraStream(videoStream);
+
+          const combinedStream = new MediaStream([
+            ...videoStream.getVideoTracks(),
+            ...stream.getAudioTracks(),
+          ]);
+          const videoMimeType = pickVideoRecorderMime();
+          const videoRecorder = new MediaRecorder(
+            combinedStream,
+            videoMimeType ? { mimeType: videoMimeType } : undefined,
+          );
+          videoRecorderRef.current = videoRecorder;
+          videoChunksRef.current = [];
+          videoRecorder.ondataavailable = (event) => {
+            if (event.data.size > 0) videoChunksRef.current.push(event.data);
+          };
+          videoRecorder.start(1000);
+        } catch (caught) {
+          console.warn("Camera unavailable, continuing without video.", caught);
+        }
 
         // WebSocket for transcript + agent responses.
         const ws = new WebSocket(`${voiceWsBase()}/interview/${session_id}`);
@@ -285,6 +333,28 @@ export function useInterviewSession() {
       recorder.stop();
     });
 
+    const videoRecorder = videoRecorderRef.current;
+    const finalVideoBlob = await new Promise<Blob | null>((resolve) => {
+      if (!videoRecorder || videoRecorder.state === "inactive") {
+        resolve(
+          videoChunksRef.current.length
+            ? new Blob(videoChunksRef.current, {
+                type: videoChunksRef.current[0]?.type || "video/webm",
+              })
+            : null,
+        );
+        return;
+      }
+      videoRecorder.onstop = () => {
+        resolve(
+          new Blob(videoChunksRef.current, {
+            type: videoRecorder.mimeType || "video/webm",
+          }),
+        );
+      };
+      videoRecorder.stop();
+    });
+
     teardownAudio();
 
     if (id && finalBlob && finalBlob.size > 0) {
@@ -299,6 +369,15 @@ export function useInterviewSession() {
       }
     }
 
+    if (id && finalVideoBlob && finalVideoBlob.size > 0) {
+      try {
+        await uploadInterviewVideo(id, finalVideoBlob);
+      } catch (caught) {
+        // Video recording is a nice-to-have for recruiters — never fail submission over it.
+        console.warn("Video upload failed.", caught);
+      }
+    }
+
     setStatus("ended");
     return true;
   }, [sessionId, teardownAudio]);
@@ -309,5 +388,16 @@ export function useInterviewSession() {
     };
   }, [teardownAudio]);
 
-  return { status, messages, interim, error, sessionId, speaking, interviewComplete, start, end };
+  return {
+    status,
+    messages,
+    interim,
+    error,
+    sessionId,
+    speaking,
+    interviewComplete,
+    cameraStream,
+    start,
+    end,
+  };
 }

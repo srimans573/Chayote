@@ -1,5 +1,5 @@
 {
-  "name": "chayote",
+  "name": "talkode",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -12,13 +12,16 @@
     "@supabase/ssr": "^0.10.3",
     "@supabase/supabase-js": "^2.106.1",
     "lucide-react": "^1.16.0",
+    "marked": "^18.0.5",
     "next": "16.2.6",
+    "prismjs": "^1.30.0",
     "react": "19.2.4",
     "react-dom": "19.2.4"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
+    "@types/prismjs": "^1.26.6",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",

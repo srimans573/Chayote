@@ -145,7 +145,7 @@ export function CreateAssessmentForm({ templates }: CreateAssessmentFormProps) {
             </div>
           ) : (
             <p className="rounded-[6px] border border-[#eadbd4] bg-[#fff8f5] px-3 py-2 text-sm text-[#7a3a27]">
-              No Supabase codebase technologies are available.
+              No codebase technologies are available.
             </p>
           )}
           <FieldError message={state.fieldErrors?.technologies} />

@@ -7,7 +7,7 @@ import {
 } from "@/app/dashboard/data";
 
 export const metadata: Metadata = {
-  title: "Assessments | Chayote",
+  title: "Assessments | Talkode",
 };
 
 function statusClass(status: AssessmentStatus) {
@@ -37,7 +37,7 @@ export default async function AssessmentsPage() {
             Assessments
           </h1>
           <p className="mt-2 text-sm text-[#55594f]">
-            Supabase-backed assessment records.
+            Assessment records.
           </p>
         </div>
         <Link
@@ -125,7 +125,7 @@ export default async function AssessmentsPage() {
           ))
         ) : (
           <p className="rounded-[8px] border border-[#f0eeea] bg-white px-4 py-8 text-sm text-[#62675e]">
-            No assessments found in Supabase.
+            No assessments found.
           </p>
         )}
       </section>

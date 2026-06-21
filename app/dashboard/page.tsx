@@ -4,11 +4,10 @@ import { ArrowRight, Plus } from "lucide-react";
 import {
   getDashboardData,
   type AssessmentStatus,
-  type CandidateRisk,
 } from "@/app/dashboard/data";
 
 export const metadata: Metadata = {
-  title: "Dashboard | Chayote",
+  title: "Dashboard | Talkode",
 };
 
 function statusClass(status: AssessmentStatus) {
@@ -27,17 +26,6 @@ function statusClass(status: AssessmentStatus) {
   return "bg-[#efeeeb] text-[#555a51]";
 }
 
-function riskClass(risk: CandidateRisk) {
-  if (risk === "high") {
-    return "bg-[#ffe7df] text-[#80321d]";
-  }
-
-  if (risk === "medium") {
-    return "bg-[#fff0c2] text-[#6f5314]";
-  }
-
-  return "bg-[#e5e8df] text-[#4f564a]";
-}
 
 export default async function DashboardPage() {
   const data = await getDashboardData();
@@ -146,7 +134,7 @@ export default async function DashboardPage() {
               ))
             ) : (
               <p className="px-4 py-8 text-sm text-[#62675e]">
-                No assessments found in Supabase.
+                No assessments found.
               </p>
             )}
           </div>
@@ -177,39 +165,18 @@ export default async function DashboardPage() {
                         {candidate.name}
                       </p>
                       <p className="mt-1 text-sm text-[#62675e]">
-                        {candidate.roleName}
+                        {candidate.assessmentTitle}
                       </p>
                     </div>
-                    <span
-                      className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${riskClass(
-                        candidate.risk,
-                      )}`}
-                    >
-                      {candidate.riskLabel}
-                    </span>
-                  </div>
-
-                  <div className="mt-4 grid grid-cols-3 gap-3 text-sm">
-                    <div>
-                      <p className="text-xs font-semibold text-[#6b7067]">Stage</p>
-                      <p className="mt-1 font-bold">{candidate.stageLabel}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs font-semibold text-[#6b7067]">Score</p>
-                      <p className="mt-1 font-bold">{candidate.score ?? "-"}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs font-semibold text-[#6b7067]">
-                        Activity
-                      </p>
-                      <p className="mt-1 font-bold">{candidate.activityLabel}</p>
-                    </div>
+                    <p className="shrink-0 text-xs font-semibold text-[#6b7067]">
+                      {candidate.activityLabel}
+                    </p>
                   </div>
                 </article>
               ))
             ) : (
               <p className="px-4 py-8 text-sm text-[#62675e]">
-                No candidates found in Supabase.
+                No candidates found.
               </p>
             )}
           </div>

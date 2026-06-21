@@ -3,7 +3,7 @@ import { getCreateAssessmentData } from "@/app/dashboard/data";
 import { CreateAssessmentForm } from "@/app/dashboard/assessments/new/CreateAssessmentForm";
 
 export const metadata: Metadata = {
-  title: "Create Assessment | Chayote",
+  title: "Create Assessment | Talkode",
 };
 
 export default async function NewAssessmentPage() {
@@ -16,7 +16,7 @@ export default async function NewAssessmentPage() {
           Create assessment
         </h1>
         <p className="mt-2 text-sm text-[#55594f]">
-          React code-review assessment backed by Supabase code files.
+          React code-review assessment backed by your codebase files.
         </p>
       </section>
 

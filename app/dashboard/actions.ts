@@ -181,7 +181,7 @@ export async function createAssessment(
 
   if (templateError || !codebaseTemplate) {
     return {
-      message: "No Supabase codebase template matches those technologies.",
+      message: "No codebase template matches those technologies.",
       status: "error",
     };
   }
@@ -211,7 +211,7 @@ export async function createAssessment(
 
     if (rubricError || !rubricTemplate) {
       return {
-        message: "No Supabase rubric template is available for this codebase.",
+        message: "No rubric template is available for this codebase.",
         status: "error",
       };
     }
