@@ -15,6 +15,7 @@ class CreateSessionRequest(BaseModel):
     problem_id: str
     problem_title: str
     problem_statement: str
+    question_guidelines: str = ""  # rubric content from assessment_rubric_templates
 
 
 @router.post("")
@@ -28,6 +29,7 @@ async def create_session(body: CreateSessionRequest):
         "problem_id": body.problem_id,
         "problem_title": body.problem_title,
         "problem_statement": body.problem_statement,
+        "question_guidelines": body.question_guidelines,
         "started_at": datetime.now(timezone.utc).isoformat(),
         "ended_at": None,
         "status": "active",

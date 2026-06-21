@@ -14,6 +14,7 @@ export type CreateSessionBody = {
   problem_id: string;
   problem_title: string;
   problem_statement: string;
+  question_guidelines: string;
 };
 
 export type BackendSession = {
@@ -46,6 +47,7 @@ export type TimelineEvent = {
 export type InterviewServerMessage =
   | { type: "agent_intro"; text: string; timestamp_ms?: number }
   | { type: "agent_response"; text: string; timestamp_ms?: number }
+  | { type: "agent_audio"; audio_b64: string }
   | { type: "transcript_chunk"; text: string; is_final?: boolean }
   | { type: "session_started"; text: string }
   | { type: "error"; text: string };

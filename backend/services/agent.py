@@ -8,10 +8,25 @@ from openai import AsyncOpenAI
 client = AsyncOpenAI(api_key=os.environ.get("OPENAI_API_KEY", ""))
 
 # Rule-gate phrase lists
-STUCK_PHRASES = ["i'm stuck", "im stuck", "i don't know", "i dont know", "not sure how", "don't know how", "no idea how", "i don't understand", "i dont understand", "i'm confused", "i'm lost", "i don't get it", "not sure what"]
-HINT_PHRASES = ["can i get a hint", "give me a hint", "is this the right direction", "what should i look at", "am i on the right track"]
-QUESTION_SIGNALS = ["should i", "what if", "does this need", "do i need", "how do i", "what do i", "how should i", "how would i", "how can i", "what's the best", "what is the best", "?"]
-DECISION_PHRASES = ["i'll go with", "i'll use", "i'm going to use", "i'm choosing", "i'll choose"]
+STUCK_PHRASES = [
+    "i'm stuck", "im stuck", "i don't know", "i dont know",
+    "not sure how", "don't know how", "no idea how",
+    "i don't understand", "i dont understand", "i'm confused",
+    "i'm lost", "i don't get it", "not sure what", "not sure where",
+]
+HINT_PHRASES = [
+    "can i get a hint", "give me a hint", "is this the right direction",
+    "what should i look at", "am i on the right track",
+]
+QUESTION_SIGNALS = [
+    "should i", "what if", "does this need", "do i need",
+    "how do i", "what do i", "how should i", "how would i",
+    "how can i", "what's the best", "what is the best",
+    "why is", "why does", "why would", "what happens", "?",
+]
+DECISION_PHRASES = [
+    "i'll go with", "i'll use", "i'm going to use", "i'm choosing", "i'll choose",
+]
 
 
 def rule_gate(text: str) -> str | None:
@@ -32,7 +47,6 @@ def rule_gate(text: str) -> str | None:
 
 
 async def get_rolling_window(session_id: str, r: redis.Redis, window_seconds: int = 40) -> str:
-    # Pull last 50 chunks, filter to window
     raw_chunks = await r.lrange(f"session:{session_id}:transcript_chunks", -50, -1)
     cutoff_ms = int(time.time() * 1000) - (window_seconds * 1000)
     texts = [
@@ -43,10 +57,18 @@ async def get_rolling_window(session_id: str, r: redis.Redis, window_seconds: in
     return " ".join(texts)
 
 
-async def get_rolling_memory(session_id: str, r: redis.Redis) -> str:
-    # Short list of what the agent has already covered this session
+async def get_memory(session_id: str, r: redis.Redis) -> str:
     items = await r.lrange(f"session:{session_id}:memory_notes", 0, -1)
     return "; ".join(items) if items else "Nothing covered yet."
+
+
+async def get_stage(session_id: str, r: redis.Redis) -> int:
+    val = await r.get(f"session:{session_id}:current_stage")
+    return int(val) if val else 0
+
+
+async def advance_stage(session_id: str, r: redis.Redis):
+    await r.incr(f"session:{session_id}:current_stage")
 
 
 async def maybe_respond(session_id: str, r: redis.Redis) -> str | None:
@@ -59,7 +81,6 @@ async def maybe_respond(session_id: str, r: redis.Redis) -> str | None:
     if not trigger:
         return None
 
-    # Pull context for the LLM call
     meta_raw = await r.get(f"session:{session_id}:meta")
     if not meta_raw:
         return None
@@ -67,47 +88,89 @@ async def maybe_respond(session_id: str, r: redis.Redis) -> str | None:
 
     code_raw = await r.get(f"session:{session_id}:latest_code")
     code_snapshot = code_raw or "(no code written yet)"
+    memory = await get_memory(session_id, r)
+    stage = await get_stage(session_id, r)
 
-    memory_notes = await get_rolling_memory(session_id, r)
+    guidelines = meta.get("question_guidelines", "")
 
-    prompt = f"""You are a senior engineer sitting with a candidate during a technical interview. Here is the problem they are solving:
-{meta["problem_statement"]}
+    if trigger in ("stuck", "hint_request"):
+        response = await _guide_response(meta, code_snapshot, window, memory, stage, guidelines)
+    else:
+        # question or decision — decide whether to nudge or advance the interview
+        response = await _interviewer_response(meta, code_snapshot, window, memory, stage, guidelines)
 
-Their current code:
-{code_snapshot}
+    print(f"[openai] raw response: {response!r}")
 
-What the candidate just said (ignore any transcription noise):
-"{window}"
-
-Already covered this session: {memory_notes}
-
-Your job: if the candidate asked ANY question or expressed confusion or being stuck, respond helpfully and briefly — 1-3 sentences max, like a real mentor nudging them in the right direction, not giving the answer away. Be direct and practical.
-
-Only respond with exactly the word NONE (nothing else) if the candidate is clearly just thinking out loud with no question or confusion expressed at all."""
-
-    print(f"[openai] calling with problem={meta['problem_title']!r} trigger window={window[-100:]!r}")
-    print(f"[openai] code_snapshot={code_snapshot[:200]!r}")
-    response = await client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[{"role": "user", "content": prompt}],
-        max_tokens=200,
-        temperature=0.4,
-    )
-
-    text = response.choices[0].message.content.strip()
-    print(f"[openai] raw response: {text!r}")
-    if text == "NONE":
+    if not response or response.strip().upper() == "NONE":
         return None
 
-    # Log the event and update memory notes
     event = {
         "type": "agent_response",
         "t_start": time.time(),
         "t_end": time.time(),
-        "quote": window[-200:],  # last 200 chars of window as the trigger quote
-        "label": text,
+        "quote": window[-200:],
+        "label": response,
+        "trigger": trigger,
+        "stage": stage,
     }
     await r.rpush(f"session:{session_id}:events", json.dumps(event))
-    await r.rpush(f"session:{session_id}:memory_notes", text[:100])
+    await r.rpush(f"session:{session_id}:memory_notes", response[:120])
 
-    return text
+    return response
+
+
+async def _guide_response(meta: dict, code: str, window: str, memory: str, stage: int, guidelines: str) -> str:
+    prompt = f"""You are a senior software engineer conducting a technical interview for the role: {meta["problem_title"]}.
+
+Here is the interview rubric you are following:
+{guidelines if guidelines else "(no rubric provided)"}
+
+The candidate's current code:
+{code}
+
+What the candidate just said:
+"{window}"
+
+What has been discussed so far in this session: {memory}
+Current interview stage: {stage}
+
+The candidate is stuck or confused. Give them ONE brief nudge — 1-2 sentences max. Speak like a colleague sitting next to them. Don't lecture. Don't give the answer away. Use plain, direct language. No "Great question!" or filler phrases.
+
+If you genuinely cannot help without giving away the answer, respond with exactly: NONE"""
+
+    return await _call_openai(prompt, model="gpt-4o-mini")
+
+
+async def _interviewer_response(meta: dict, code: str, window: str, memory: str, stage: int, guidelines: str) -> str:
+    prompt = f"""You are a senior software engineer conducting a technical interview for the role: {meta["problem_title"]}.
+
+Here is the interview rubric you are following:
+{guidelines if guidelines else "(no rubric provided)"}
+
+The candidate's current code:
+{code}
+
+What the candidate just said:
+"{window}"
+
+What has been discussed so far: {memory}
+Current interview stage: {stage}
+
+The candidate asked a question or made a statement about their approach. Do ONE of the following:
+1. If their question shows they're ready to move to the next area of the rubric, ask the next natural interview question from the rubric — conversationally, like a curious engineer, not a scripted interviewer.
+2. If they need a nudge on the current area, give a brief practical hint (1-2 sentences).
+
+Speak naturally. No filler phrases. No "That's a great point." If the candidate's statement requires no response (just thinking out loud), respond with exactly: NONE"""
+
+    return await _call_openai(prompt, model="gpt-4o-mini")
+
+
+async def _call_openai(prompt: str, model: str) -> str:
+    print(f"[openai] calling {model}")
+    response = await client.chat.completions.create(
+        model=model,
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=150,
+        temperature=0.5,
+    )
+    return response.choices[0].message.content.strip()

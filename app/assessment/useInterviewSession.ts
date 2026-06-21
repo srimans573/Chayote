@@ -75,6 +75,7 @@ export function useInterviewSession() {
   const [interim, setInterim] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [speaking, setSpeaking] = useState(false);
 
   const streamRef = useRef<MediaStream | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
@@ -127,6 +128,7 @@ export function useInterviewSession() {
           problem_id: args.problem_id,
           problem_title: args.problem_title,
           problem_statement: args.problem_statement,
+          question_guidelines: args.question_guidelines,
         });
         setSessionId(session_id);
 
@@ -203,14 +205,32 @@ export function useInterviewSession() {
           if (payload.type === "transcript_chunk") {
             if (payload.is_final) {
               setInterim("");
-              if (payload.text.trim()) pushMessage("you", payload.text);
+              pushMessage("you", payload.text);
             } else {
               setInterim(payload.text);
             }
+          } else if (payload.type === "agent_audio") {
+            const binary = atob(payload.audio_b64);
+            const bytes = new Uint8Array(binary.length);
+            for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+            const blob = new Blob([bytes], { type: "audio/mpeg" });
+            const url = URL.createObjectURL(blob);
+            const audio = new Audio(url);
+            setSpeaking(true);
+            audio.onended = () => {
+              setSpeaking(false);
+              URL.revokeObjectURL(url);
+            };
+            audio.onerror = () => {
+              setSpeaking(false);
+              URL.revokeObjectURL(url);
+            };
+            audio.play().catch(() => setSpeaking(false));
           } else if (
             payload.type === "agent_intro" ||
             payload.type === "agent_response"
           ) {
+            // fallback if TTS failed
             pushMessage("agent", payload.text);
           } else if (payload.type === "error") {
             setError(payload.text);
@@ -286,5 +306,5 @@ export function useInterviewSession() {
     };
   }, [teardownAudio]);
 
-  return { status, messages, interim, error, sessionId, start, end };
+  return { status, messages, interim, error, sessionId, speaking, start, end };
 }

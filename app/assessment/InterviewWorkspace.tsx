@@ -150,7 +150,7 @@ export function InterviewWorkspace({
   const [panelOpen, setPanelOpen] = useState(true);
   const [secondsLeft, setSecondsLeft] = useState(() => initialSeconds(session));
 
-  const { status, messages, interim, error, sessionId, start, end } =
+  const { status, messages, interim, error, sessionId, speaking, start, end } =
     useInterviewSession();
 
   const activeFile = files.find((file) => file.path === activePath) ?? files[0] ?? null;
@@ -173,6 +173,7 @@ export function InterviewWorkspace({
     problem_id: session.assessmentId,
     problem_title: session.title,
     problem_statement: buildProblemStatement(session),
+    question_guidelines: session.rubric,
   });
   useEffect(() => {
     void start({ ...startArgsRef.current, getCode: () => codeRef.current });
@@ -285,20 +286,20 @@ export function InterviewWorkspace({
     <div className="tk-scope fixed inset-0 flex flex-col overflow-hidden bg-[#0d0e0f] text-[#e2e2e2] selection:bg-[#005321] selection:text-[#6efb9b]">
       <style>{workspaceCss}</style>
 
-      {/* Floating Recruiter Bar */}
+      {/* AI Speaking Indicator */}
       <div className="absolute top-4 left-1/2 z-50 flex -translate-x-1/2 items-center space-x-3 rounded-full border border-[#444746] bg-[#343535] px-4 py-2 shadow-lg">
         <div className="flex items-center space-x-2">
-          <div className={cx("h-2 w-2 rounded-full", dotColor, live && "animate-pulse")} />
+          <div className={cx("h-2 w-2 rounded-full", speaking ? "bg-[#4ade80] animate-pulse" : dotColor)} />
           <span className="text-xs font-medium uppercase tracking-wide text-[#e2e2e2]">
-            AI Interviewer
+            {speaking ? "AI Speaking" : "AI Interviewer"}
           </span>
         </div>
         <div className="flex h-4 items-center space-x-1">
           {[8, 12, 16, 10, 6].map((height, index) => (
             <div
               key={index}
-              className={cx("w-1 rounded-full bg-[#4ade80]", live && "tk-wf")}
-              style={{ height: live ? `${height}px` : "4px" }}
+              className={cx("w-1 rounded-full bg-[#4ade80]", speaking && "tk-wf")}
+              style={{ height: speaking ? `${height}px` : "4px" }}
             />
           ))}
         </div>
