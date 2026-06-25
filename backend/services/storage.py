@@ -28,6 +28,13 @@ def _headers() -> dict:
     }
 
 
+# This project's plan caps storage objects at 50MB — asking for more makes
+# the bucket create/update call itself fail with 413, so this just makes the
+# existing plan limit explicit. Recordings are also bitrate-capped client-side
+# so they should land well under this regardless.
+BUCKET_FILE_SIZE_LIMIT = 52_428_800  # 50MB
+
+
 async def ensure_bucket() -> None:
     global _bucket_ready
     if _bucket_ready or not _configured():
@@ -37,10 +44,26 @@ async def ensure_bucket() -> None:
             resp = await client.post(
                 f"{SUPABASE_URL}/storage/v1/bucket",
                 headers=_headers(),
-                json={"id": BUCKET, "name": BUCKET, "public": False},
+                json={
+                    "id": BUCKET,
+                    "name": BUCKET,
+                    "public": False,
+                    "file_size_limit": BUCKET_FILE_SIZE_LIMIT,
+                },
                 timeout=10,
             )
-            if resp.status_code not in (200, 201, 409):
+            if resp.status_code == 409:
+                # Bucket already exists from before this limit was added —
+                # try to raise its limit too. Ignore failure either way.
+                update_resp = await client.put(
+                    f"{SUPABASE_URL}/storage/v1/bucket/{BUCKET}",
+                    headers=_headers(),
+                    json={"id": BUCKET, "public": False, "file_size_limit": BUCKET_FILE_SIZE_LIMIT},
+                    timeout=10,
+                )
+                if update_resp.status_code not in (200, 201):
+                    print(f"[storage] bucket update failed: {update_resp.status_code} {update_resp.text}")
+            elif resp.status_code not in (200, 201):
                 print(f"[storage] bucket create failed: {resp.status_code} {resp.text}")
         except Exception as e:
             print(f"[storage] bucket create error: {e}")
@@ -93,6 +116,7 @@ async def get_signed_video_url(
                 timeout=10,
             )
             if resp.status_code != 200:
+                print(f"[storage] sign url failed: {resp.status_code} {resp.text}")
                 return None
             signed_path = resp.json().get("signedURL")
             if not signed_path:

@@ -226,11 +226,13 @@ export function useInterviewSession() {
         silentGain.connect(audioCtx.destination);
 
         // Recording path for the batch pipeline (full-session upload on end).
+        // Bitrate capped so even a long session stays well under Supabase
+        // Storage's per-object size limit.
         const mimeType = pickRecorderMime();
-        const recorder = new MediaRecorder(
-          stream,
-          mimeType ? { mimeType } : undefined,
-        );
+        const recorder = new MediaRecorder(stream, {
+          ...(mimeType ? { mimeType } : {}),
+          audioBitsPerSecond: 32_000,
+        });
         recorderRef.current = recorder;
         chunksRef.current = [];
         recorder.ondataavailable = (event) => {
@@ -252,10 +254,11 @@ export function useInterviewSession() {
             ...stream.getAudioTracks(),
           ]);
           const videoMimeType = pickVideoRecorderMime();
-          const videoRecorder = new MediaRecorder(
-            combinedStream,
-            videoMimeType ? { mimeType: videoMimeType } : undefined,
-          );
+          const videoRecorder = new MediaRecorder(combinedStream, {
+            ...(videoMimeType ? { mimeType: videoMimeType } : {}),
+            videoBitsPerSecond: 64_000,
+            audioBitsPerSecond: 24_000,
+          });
           videoRecorderRef.current = videoRecorder;
           videoChunksRef.current = [];
           videoRecorder.ondataavailable = (event) => {
@@ -287,10 +290,10 @@ export function useInterviewSession() {
           screenStreamRef.current = screenStream;
 
           const screenMimeType = pickVideoRecorderMime();
-          const screenRecorder = new MediaRecorder(
-            screenStream,
-            screenMimeType ? { mimeType: screenMimeType } : undefined,
-          );
+          const screenRecorder = new MediaRecorder(screenStream, {
+            ...(screenMimeType ? { mimeType: screenMimeType } : {}),
+            videoBitsPerSecond: 80_000,
+          });
           screenRecorderRef.current = screenRecorder;
           screenChunksRef.current = [];
           screenRecorder.ondataavailable = (event) => {

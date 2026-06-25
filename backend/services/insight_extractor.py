@@ -42,7 +42,9 @@ async def extract_insights(session_id: str, r: redis.Redis):
         for t in history
     )
 
-    rubric = meta.get("question_guidelines", "(no rubric provided)")
+    rubric = meta.get("question_guidelines", "").strip()
+    has_rubric = bool(rubric)
+    rubric_section = rubric if has_rubric else "(no rubric was configured for this assessment)"
     problem = meta.get("problem_title", "Unknown problem")
     candidate = meta.get("candidate_name", "Candidate")
 
@@ -58,11 +60,17 @@ Mid-interview coding challenge: {challenge_grade.get("title", "Coding challenge"
 
     prompt = f"""You are analyzing a technical coding interview for HR. Produce a structured JSON assessment.
 
+Ground every claim in this report — including the summary, strengths, and gaps, not just rubric_scores — in
+something that actually appears in "Full conversation" below. If the candidate barely spoke or the conversation
+is mostly the interviewer talking, say so plainly (e.g. "the candidate did not engage with the codebase discussion
+before ending the session") rather than inferring a plausible-sounding performance from the task description or
+codebase alone.
+
 Candidate: {candidate}
 Problem: {problem}
 
 Rubric:
-{rubric}
+{rubric_section}
 
 Final code:
 {final_code}
@@ -102,7 +110,20 @@ Return a JSON object with exactly these fields:
   ]
 }}
 
-For rubric_scores: score every question in the rubric on the 0-4 scale, mapping the rubric's Pass/Partial/Fail criteria onto it (Pass ≈ 3-4, Partial ≈ 2, Fail ≈ 0-1). Base the score strictly on evidence from the conversation — what the candidate actually said, not what they should have said. If a rubric question was never reached, score it 0 with reason "not reached in session". Do NOT include the mid-interview coding challenge in rubric_scores — it is scored separately and will be appended automatically.
+For rubric_scores: {(
+        "score every question in the rubric on the 0-4 scale, mapping the rubric's Pass/Partial/Fail criteria onto it "
+        "(Pass ≈ 3-4, Partial ≈ 2, Fail ≈ 0-1). Use ONLY the questions explicitly listed in the Rubric section above — "
+        "never invent additional questions from the README, the code, or the candidate task description, even if they "
+        "suggest plausible categories. Every score above 0 must be justified by something the CANDIDATE actually said "
+        "in the conversation above — not by what a good candidate would likely have said, and not by inference from the "
+        "codebase or task description alone. If a rubric question was never reached or the candidate never addressed "
+        "it, score it 0 with reason \"not reached in session\"."
+    ) if has_rubric else (
+        "this assessment has no rubric configured (see the Rubric section above), so you MUST return an empty array "
+        "for rubric_scores. Do not invent rubric questions from the README, the code, or the candidate task "
+        "description — there is no rubric to score against."
+    )}
+Do NOT include the mid-interview coding challenge in rubric_scores — it is scored separately and will be appended automatically.
 For intent_map: include every meaningful candidate turn and key agent turns. Skip pure filler. Labels must be concise past-tense phrases like "explained the filter logic" or "got stuck on edge case". Do not copy these examples directly."""
 
     try:
@@ -124,6 +145,11 @@ For intent_map: include every meaningful candidate turn and key agent turns. Ski
             "rubric_scores": [],
             "intent_map": [],
         }
+
+    if not has_rubric:
+        # Hard guard, independent of whether the model followed instructions:
+        # with no real rubric, any rubric_scores would necessarily be invented.
+        insights["rubric_scores"] = []
 
     if challenge_grade:
         insights.setdefault("rubric_scores", []).append(

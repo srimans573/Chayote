@@ -152,6 +152,9 @@ export type CodingChallenge = {
   constraints: string[];
   starter_code: Record<string, string>;
   default_language: string;
+  // Reference editorial — only present on the recruiter-facing challenge
+  // review endpoint, never sent to the candidate during the live interview.
+  solution?: string;
 };
 
 export async function startCodingChallenge(

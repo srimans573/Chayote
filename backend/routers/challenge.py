@@ -5,11 +5,93 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from services.agent import client as llm_client, log_agent_turn, log_candidate_turn
-from services.challenge_picker import pick_challenge
+from services.challenge_picker import pick_challenge_pool
 from services.redis_client import get_redis
 from services.tts import synthesize
 
 router = APIRouter(prefix="/session", tags=["challenge"])
+
+
+async def _evaluate_candidate(problem: dict, codebase_context: str) -> dict:
+    """Single LLM pass that decides whether a picked question is worth using:
+
+    1. Relevance — does it touch on something that plausibly relates to the
+       candidate's actual codebase (similar data structures, concepts, or
+       performance concerns), not just a generic "efficiency" framing?
+    2. Completeness — is the description/examples/constraints intact, or did
+       the scrape lose something (a dangling "...following interface:" etc.)?
+
+    If it's relevant but only has a small, mechanical gap (e.g. a missing
+    interface list that the starter code already implies), the model is
+    allowed to patch ONLY the description text and we use its fixed version —
+    examples/constraints/starter code are never touched. If it's irrelevant,
+    or broken beyond a small fix, it's rejected and the caller moves on to
+    the next candidate in the pool.
+    """
+    examples_text = "\n".join(e.get("example_text", "") for e in problem.get("examples") or [])
+    constraints_text = "\n".join(problem.get("constraints") or [])
+
+    prompt = f"""You are screening a coding-interview question before it's shown to a candidate, mid-interview.
+
+Candidate's actual codebase / assessment context:
+{codebase_context or "(no codebase context available)"}
+
+Candidate question being considered:
+Title: {problem.get("title")}
+Difficulty: {problem.get("difficulty")}
+Topics: {", ".join(problem.get("topics") or [])}
+
+Description:
+{problem.get("description", "")}
+
+Examples:
+{examples_text or "(none)"}
+
+Constraints:
+{constraints_text or "(none)"}
+
+Starter code:
+{problem.get("starter_code", {}).get(problem.get("default_language", "python"), "")}
+
+Evaluate two things:
+
+1. RELEVANCE: does this question touch on a concept, data structure, or performance concern that plausibly
+   relates to the codebase context above (e.g. the codebase does lookups and this is about hash maps; the
+   codebase streams data and this is about sliding windows/queues; etc.)? It doesn't need to be a perfect match —
+   just a genuine, explainable connection a candidate would find sensible, not a forced stretch.
+
+2. COMPLETENESS: this dataset is scraped from web pages, so the most common defect is a sentence ending in a
+   colon that promises something ("the following interface:", "for example, for the string t = \"aab\":") and
+   then the text just moves on without ever giving what was promised. If you spot that pattern, or any other
+   missing/contradictory content, decide:
+   - "fixable": the gap is small and mechanical (e.g. you can tell exactly what list/example should follow from
+     the starter code or examples) — in this case, write a corrected description that fills ONLY that gap. Do
+     not rewrite, rephrase, or improve anything else about the description.
+   - "broken": the gap is more than a small mechanical fix, or the question is confusing/ambiguous/missing
+     information needed to solve it — do not attempt a fix.
+
+Return a JSON object with exactly these fields:
+{{
+  "relevant": true or false,
+  "status": "complete" or "fixable" or "broken",
+  "fixed_description": "corrected description text if status is fixable, otherwise empty string",
+  "reason": "one short sentence explaining the relevance and/or completeness verdict"
+}}"""
+
+    try:
+        response = await llm_client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": prompt}],
+            response_format={"type": "json_object"},
+            temperature=0,
+        )
+        result = json.loads(response.choices[0].message.content)
+        result["status"] = result.get("status") if result.get("status") in ("complete", "fixable", "broken") else "broken"
+        return result
+    except Exception as e:
+        print(f"[challenge] evaluation failed, treating as usable: {e}")
+        # Don't let a flaky LLM call block the interview — fail open.
+        return {"relevant": True, "status": "complete", "fixed_description": "", "reason": "evaluation skipped (error)"}
 
 
 async def _grade_submission(problem: dict, code: str, language: str) -> dict:
@@ -70,10 +152,28 @@ async def start_challenge(session_id: str):
     raw = await r.get(f"session:{session_id}:meta")
     if not raw:
         raise HTTPException(status_code=404, detail="Session not found")
+    meta = json.loads(raw)
+    codebase_context = meta.get("problem_statement", "")
 
-    problem = pick_challenge(session_id)
-    if not problem:
+    pool = pick_challenge_pool(session_id)
+    if not pool:
         raise HTTPException(status_code=503, detail="No coding challenge available")
+
+    problem = None
+    for candidate in pool:
+        verdict = await _evaluate_candidate(candidate, codebase_context)
+        if not verdict.get("relevant") or verdict["status"] == "broken":
+            print(f"[challenge] skipped {candidate['title']!r}: {verdict.get('reason')}")
+            continue
+        if verdict["status"] == "fixable" and verdict.get("fixed_description"):
+            candidate = {**candidate, "description": verdict["fixed_description"]}
+        problem = candidate
+        break
+    if problem is None:
+        # Nothing passed — show the best-ranked one anyway rather than
+        # blocking the interview entirely.
+        print(f"[challenge] no candidate passed evaluation for session {session_id}, falling back")
+        problem = pool[0]
 
     await r.set(f"session:{session_id}:challenge", json.dumps(problem))
 
@@ -84,7 +184,11 @@ async def start_challenge(session_id: str):
     await log_agent_turn(session_id, r, intro_text)
     audio_b64 = await synthesize(intro_text)
 
-    return {"problem": problem, "intro_text": intro_text, "intro_audio_b64": audio_b64}
+    # Never send the reference solution to the candidate — it's only for the
+    # recruiter report, surfaced via the dashboard challenge-review endpoint.
+    candidate_problem = {k: v for k, v in problem.items() if k != "solution"}
+
+    return {"problem": candidate_problem, "intro_text": intro_text, "intro_audio_b64": audio_b64}
 
 
 class ChallengeSubmitBody(BaseModel):

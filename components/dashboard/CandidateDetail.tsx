@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { marked } from "marked";
 import { ArrowLeft, Bot, Mic, RefreshCw } from "lucide-react";
 import type { DashboardCandidate } from "@/app/dashboard/data";
 import {
@@ -55,6 +56,32 @@ function scoreBadgeClass(score: number) {
   return "bg-[#d7ff5a] text-[#202322]";
 }
 
+// Cleans up the LeetCode-export editorial so it actually reads well here:
+// - strips "[TOC]" and the boilerplate "Video Solution"/generic "Solution"
+//   preamble headers, which point at nothing on our end
+// - strips "!?!...!?!" interactive-slideshow placeholders (LeetCode-only UI,
+//   never resolves to real content for us)
+// - "Implementation" sections point at per-language code tabs that were lost
+//   in the scrape — when nothing actually follows before the next heading,
+//   the header itself gets glued onto the next one (e.g.
+//   "Implementation#### Complexity Analysis"); drop the empty label
+// - the scrape sometimes glues a heading directly onto the preceding
+//   sentence with no line break — re-separate them
+// - there's no math renderer here, so inline/block LaTeX ($...$, $$...$$)
+//   is shown as monospace text instead of literal, confusing dollar signs
+function cleanSolutionMarkdown(raw: string): string {
+  return raw
+    .replace(/^\[TOC\]\s*/i, "")
+    .replace(/##\s*Video Solution[\s\S]*?---\s*##\s*Solution Article\s*\n*---/i, "")
+    .replace(/^##\s*Solution\s*\n+---\s*/i, "")
+    .replace(/!\?!.*?!\?!/g, "")
+    .replace(/#{2,6}\s*Implementation(?=#{2,6})/gi, "")
+    .replace(/([^\n#])(#{2,6}\s)/g, "$1\n\n$2")
+    .replace(/\$\$([^$]+?)\$\$/g, (_, expr: string) => `\`${expr.trim()}\``)
+    .replace(/\$([^$]+?)\$/g, (_, expr: string) => `\`${expr.trim()}\``)
+    .trim();
+}
+
 function elapsedLabel(turnTs: number, sessionStartedAt: string) {
   const startMs = new Date(sessionStartedAt).getTime();
   if (Number.isNaN(startMs)) return "—";
@@ -90,6 +117,7 @@ export function CandidateDetail({ candidate }: { candidate: DashboardCandidate }
   const [challengeProblem, setChallengeProblem] = useState<CodingChallenge | null>(null);
   const [challengeCode, setChallengeCode] = useState<string | null>(null);
   const [challengeGrade, setChallengeGrade] = useState<ChallengeGrade | null>(null);
+  const [challengeTab, setChallengeTab] = useState<"submission" | "solution">("submission");
   const [detailLoading, setDetailLoading] = useState(true);
   const [detailError, setDetailError] = useState<string | null>(null);
   const [sessionsListError, setSessionsListError] = useState<string | null>(null);
@@ -147,6 +175,11 @@ export function CandidateDetail({ candidate }: { candidate: DashboardCandidate }
     }
   }, [loadDetail]);
 
+  const solutionHtml = useMemo(() => {
+    if (!challengeProblem?.solution) return "";
+    return marked.parse(cleanSolutionMarkdown(challengeProblem.solution)) as string;
+  }, [challengeProblem]);
+
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- initial data fetch on mount
     void refreshSessions();
@@ -155,6 +188,17 @@ export function CandidateDetail({ candidate }: { candidate: DashboardCandidate }
 
   return (
     <>
+      <style>{`
+        .challenge-solution h1, .challenge-solution h2, .challenge-solution h3 { font-weight: 700; margin: 0.7em 0 0.3em; color: #202322; }
+        .challenge-solution h3 { font-size: 0.95rem; }
+        .challenge-solution p { margin: 0.5em 0; }
+        .challenge-solution ul, .challenge-solution ol { margin: 0.4em 0 0.4em 1.2em; }
+        .challenge-solution li { margin: 0.2em 0; }
+        .challenge-solution code { font-family: ui-monospace, monospace; background: #ebe9e6; padding: 0.1em 0.35em; border-radius: 4px; font-size: 0.85em; }
+        .challenge-solution pre { background: #1c1e1c; color: #e2e2e2; padding: 0.75em 1em; border-radius: 6px; overflow-x: auto; margin: 0.6em 0; }
+        .challenge-solution pre code { background: none; padding: 0; color: inherit; }
+        .challenge-solution hr { border-color: #f0eeea; margin: 0.8em 0; }
+      `}</style>
       <Link
         href="/dashboard/candidates"
         className="inline-flex items-center gap-1.5 text-sm font-semibold text-[#353a32] transition hover:text-[#111510]"
@@ -251,6 +295,14 @@ export function CandidateDetail({ candidate }: { candidate: DashboardCandidate }
           <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-[#3d4239]">
             {challengeProblem.description}
           </p>
+          {challengeProblem.examples.map((example) => (
+            <pre
+              key={example.example_num}
+              className="mt-3 whitespace-pre-wrap rounded-[6px] border border-[#f0eeea] bg-[#faf9f7] p-3 font-mono text-xs text-[#3d4239]"
+            >
+              {example.example_text}
+            </pre>
+          ))}
           {challengeGrade ? (
             <p className="mt-3 text-sm text-[#3d4239]">
               <strong>Est. time complexity:</strong> {challengeGrade.time_complexity}
@@ -258,12 +310,45 @@ export function CandidateDetail({ candidate }: { candidate: DashboardCandidate }
               <strong>Grading notes:</strong> {challengeGrade.feedback}
             </p>
           ) : null}
-          <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-[#62675e]">
-            Candidate&apos;s submitted response
-          </p>
-          <pre className="mt-2 max-h-[420px] overflow-auto whitespace-pre rounded-[6px] border border-[#f0eeea] bg-[#faf9f7] p-4 font-mono text-xs text-[#202322]">
-            {challengeCode || "(no submission recorded)"}
-          </pre>
+          <div className="mt-4 flex items-center gap-1 border-b border-[#f0eeea]">
+            <button
+              type="button"
+              onClick={() => setChallengeTab("submission")}
+              className={`px-3 py-1.5 text-xs font-semibold uppercase tracking-wide transition ${
+                challengeTab === "submission"
+                  ? "border-b-2 border-[#202322] text-[#202322]"
+                  : "text-[#9aa093] hover:text-[#62675e]"
+              }`}
+            >
+              Candidate&apos;s response
+            </button>
+            <button
+              type="button"
+              onClick={() => setChallengeTab("solution")}
+              className={`px-3 py-1.5 text-xs font-semibold uppercase tracking-wide transition ${
+                challengeTab === "solution"
+                  ? "border-b-2 border-[#202322] text-[#202322]"
+                  : "text-[#9aa093] hover:text-[#62675e]"
+              }`}
+            >
+              Reference solution
+            </button>
+          </div>
+
+          {challengeTab === "submission" ? (
+            <pre className="mt-3 max-h-[420px] overflow-auto whitespace-pre rounded-[6px] border border-[#f0eeea] bg-[#faf9f7] p-4 font-mono text-xs text-[#202322]">
+              {challengeCode || "(no submission recorded)"}
+            </pre>
+          ) : solutionHtml ? (
+            <div
+              className="challenge-solution mt-3 max-h-[420px] overflow-auto rounded-[6px] border border-[#f0eeea] bg-[#faf9f7] p-4 text-sm text-[#3d4239]"
+              dangerouslySetInnerHTML={{ __html: solutionHtml }}
+            />
+          ) : (
+            <p className="mt-3 text-sm text-[#62675e]">
+              No reference editorial available for this problem in the dataset.
+            </p>
+          )}
         </section>
       ) : null}
 
