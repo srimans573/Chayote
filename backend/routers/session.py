@@ -17,6 +17,7 @@ class CreateSessionRequest(BaseModel):
     problem_statement: str
     question_guidelines: str = ""  # rubric content from assessment_rubric_templates
     rubric_topics: list[str] = []  # canonical topics, categorized once at rubric upload time
+    candidate_id: str = ""  # Supabase candidates.id — used to write score back on completion
 
 
 @router.post("")
@@ -26,6 +27,7 @@ async def create_session(body: CreateSessionRequest):
 
     meta = {
         "session_id": session_id,
+        "candidate_id": body.candidate_id,
         "candidate_name": body.candidate_name,
         "problem_id": body.problem_id,
         "problem_title": body.problem_title,

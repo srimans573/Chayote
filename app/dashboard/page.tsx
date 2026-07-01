@@ -155,8 +155,9 @@ export default async function DashboardPage() {
           <div className="overflow-hidden rounded-[8px] border border-[#f0eeea] bg-white">
             {data.candidates.length > 0 ? (
               data.candidates.map((candidate) => (
-                <article
-                  className="border-b border-[#f0eeea] px-4 py-4 last:border-b-0"
+                <Link
+                  className="block border-b border-[#f0eeea] px-4 py-4 last:border-b-0 transition hover:bg-[#faf9f7]"
+                  href={`/dashboard/candidates/${candidate.id}`}
                   key={candidate.id}
                 >
                   <div className="flex items-start justify-between gap-4">
@@ -172,7 +173,7 @@ export default async function DashboardPage() {
                       {candidate.activityLabel}
                     </p>
                   </div>
-                </article>
+                </Link>
               ))
             ) : (
               <p className="px-4 py-8 text-sm text-[#62675e]">

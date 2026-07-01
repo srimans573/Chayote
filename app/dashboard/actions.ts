@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import {
   assessmentTechnologyLabels,
+  formatInvite,
+  type AssessmentInvite,
   type AssessmentTechnology,
   type RubricSource,
 } from "@/app/dashboard/data";
@@ -11,6 +13,10 @@ import { hasSupabaseConfig } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
 import type { Json } from "@/lib/database.types";
 import { extractRubricTopics, generateCodebase } from "@/lib/voiceAgent";
+import {
+  sendInviteEmail as _sendInviteEmail,
+  sendReminderEmail as _sendReminderEmail,
+} from "@/lib/email";
 
 type AssessmentField =
   | "expirationDate"
@@ -522,5 +528,320 @@ export async function updateAssessment(
   revalidatePath("/dashboard/assessments");
   revalidatePath("/dashboard");
 
+  return { status: "success" };
+}
+
+// ---------------------------------------------------------------------------
+// Invite management
+// ---------------------------------------------------------------------------
+
+export type InviteActionState = {
+  message?: string;
+  status: "idle" | "error" | "success";
+  invite?: AssessmentInvite;
+};
+
+async function getActiveProfile() {
+  const supabase = await createClient();
+  const { data: userResult, error: userError } = await supabase.auth.getUser();
+  if (userError || !userResult.user) return { error: "Sign in to manage invites.", supabase, profile: null };
+
+  const { data: profile } = await supabase
+    .from("recruiter_profiles")
+    .select("organization_id,status")
+    .eq("id", userResult.user.id)
+    .maybeSingle();
+
+  if (!profile || profile.status !== "active") {
+    return { error: "Active recruiter access required.", supabase, profile: null };
+  }
+
+  return { error: undefined, supabase, profile };
+}
+
+export async function addCandidateInvite(
+  formData: FormData,
+): Promise<InviteActionState> {
+  const assessmentId =
+    typeof formData.get("assessmentId") === "string"
+      ? (formData.get("assessmentId") as string).trim()
+      : "";
+  const email =
+    typeof formData.get("email") === "string"
+      ? (formData.get("email") as string).trim().toLowerCase()
+      : "";
+  const name =
+    typeof formData.get("name") === "string"
+      ? (formData.get("name") as string).trim()
+      : "";
+
+  if (!assessmentId) return { status: "error", message: "Missing assessment." };
+  if (!email.includes("@")) return { status: "error", message: "Enter a valid email address." };
+
+  const { error: profileError, supabase, profile } = await getActiveProfile();
+  if (profileError || !profile) return { status: "error", message: profileError };
+
+  const { data: assessment } = await supabase
+    .from("assessments")
+    .select("id")
+    .eq("id", assessmentId)
+    .eq("organization_id", profile.organization_id)
+    .maybeSingle();
+
+  if (!assessment) return { status: "error", message: "Assessment not found." };
+
+  const { data: invite, error: insertError } = await supabase
+    .from("assessment_invites")
+    .insert({
+      assessment_id: assessmentId,
+      email,
+      name: name || null,
+    })
+    .select()
+    .single();
+
+  if (insertError || !invite) {
+    return {
+      status: "error",
+      message: insertError?.message ?? "Failed to add invite.",
+    };
+  }
+
+  revalidatePath(`/dashboard/assessments/${assessmentId}`);
+  return { status: "success", invite: formatInvite(invite) };
+}
+
+export async function sendInviteEmailAction(
+  inviteId: string,
+): Promise<{ status: "success" | "error"; message?: string }> {
+  const { error: profileError, supabase, profile } = await getActiveProfile();
+  if (profileError || !profile) return { status: "error", message: profileError };
+
+  const { data: invite } = await supabase
+    .from("assessment_invites")
+    .select("*")
+    .eq("id", inviteId)
+    .maybeSingle();
+
+  if (!invite) return { status: "error", message: "Invite not found." };
+
+  const { data: assessment } = await supabase
+    .from("assessments")
+    .select("title,time_limit_minutes,due_at,organization_id")
+    .eq("id", invite.assessment_id)
+    .eq("organization_id", profile.organization_id)
+    .maybeSingle();
+
+  if (!assessment) return { status: "error", message: "Invite not found." };
+
+  try {
+    await _sendInviteEmail({
+      to: invite.email,
+      name: invite.name,
+      inviteCode: invite.invite_code,
+      assessmentTitle: assessment.title,
+      timeLimitMinutes: assessment.time_limit_minutes,
+      dueAt: assessment.due_at,
+    });
+  } catch (err) {
+    return {
+      status: "error",
+      message: err instanceof Error ? err.message : "Failed to send email.",
+    };
+  }
+
+  await supabase
+    .from("assessment_invites")
+    .update({ email_sent_at: new Date().toISOString() })
+    .eq("id", inviteId);
+
+  revalidatePath(`/dashboard/assessments/${invite.assessment_id}`);
+  return { status: "success" };
+}
+
+export async function sendReminderEmailAction(
+  inviteId: string,
+): Promise<{ status: "success" | "error"; message?: string }> {
+  const { error: profileError, supabase, profile } = await getActiveProfile();
+  if (profileError || !profile) return { status: "error", message: profileError };
+
+  const { data: invite } = await supabase
+    .from("assessment_invites")
+    .select("*")
+    .eq("id", inviteId)
+    .maybeSingle();
+
+  if (!invite) return { status: "error", message: "Invite not found." };
+
+  const { data: assessment } = await supabase
+    .from("assessments")
+    .select("title,time_limit_minutes,due_at,organization_id")
+    .eq("id", invite.assessment_id)
+    .eq("organization_id", profile.organization_id)
+    .maybeSingle();
+
+  if (!assessment) return { status: "error", message: "Invite not found." };
+
+  try {
+    await _sendReminderEmail({
+      to: invite.email,
+      name: invite.name,
+      inviteCode: invite.invite_code,
+      assessmentTitle: assessment.title,
+      timeLimitMinutes: assessment.time_limit_minutes,
+      dueAt: assessment.due_at,
+    });
+  } catch (err) {
+    return {
+      status: "error",
+      message: err instanceof Error ? err.message : "Failed to send reminder.",
+    };
+  }
+
+  await supabase
+    .from("assessment_invites")
+    .update({ reminder_sent_at: new Date().toISOString() })
+    .eq("id", inviteId);
+
+  revalidatePath(`/dashboard/assessments/${invite.assessment_id}`);
+  return { status: "success" };
+}
+
+export async function sendAllUnsent(
+  assessmentId: string,
+): Promise<{ status: "success" | "error"; sent: number; failed: number; message?: string }> {
+  const { error: profileError, supabase, profile } = await getActiveProfile();
+  if (profileError || !profile) return { status: "error", sent: 0, failed: 0, message: profileError };
+
+  const { data: assessment } = await supabase
+    .from("assessments")
+    .select("id,title,time_limit_minutes,due_at")
+    .eq("id", assessmentId)
+    .eq("organization_id", profile.organization_id)
+    .maybeSingle();
+
+  if (!assessment) return { status: "error", sent: 0, failed: 0, message: "Assessment not found." };
+
+  const { data: invites } = await supabase
+    .from("assessment_invites")
+    .select("*")
+    .eq("assessment_id", assessmentId)
+    .eq("status", "pending")
+    .is("email_sent_at", null);
+
+  let sent = 0;
+  let failed = 0;
+
+  for (const invite of invites ?? []) {
+    try {
+      await _sendInviteEmail({
+        to: invite.email,
+        name: invite.name,
+        inviteCode: invite.invite_code,
+        assessmentTitle: assessment.title,
+        timeLimitMinutes: assessment.time_limit_minutes,
+        dueAt: assessment.due_at,
+      });
+      await supabase
+        .from("assessment_invites")
+        .update({ email_sent_at: new Date().toISOString() })
+        .eq("id", invite.id);
+      sent++;
+    } catch {
+      failed++;
+    }
+  }
+
+  revalidatePath(`/dashboard/assessments/${assessmentId}`);
+  return { status: "success", sent, failed };
+}
+
+export async function remindAllStarted(
+  assessmentId: string,
+): Promise<{ status: "success" | "error"; sent: number; failed: number; message?: string }> {
+  const { error: profileError, supabase, profile } = await getActiveProfile();
+  if (profileError || !profile) return { status: "error", sent: 0, failed: 0, message: profileError };
+
+  const { data: assessment } = await supabase
+    .from("assessments")
+    .select("id,title,time_limit_minutes,due_at")
+    .eq("id", assessmentId)
+    .eq("organization_id", profile.organization_id)
+    .maybeSingle();
+
+  if (!assessment) return { status: "error", sent: 0, failed: 0, message: "Assessment not found." };
+
+  const { data: invites } = await supabase
+    .from("assessment_invites")
+    .select("*")
+    .eq("assessment_id", assessmentId)
+    .not("email_sent_at", "is", null)
+    .neq("status", "completed");
+
+  let sent = 0;
+  let failed = 0;
+
+  for (const invite of invites ?? []) {
+    try {
+      await _sendReminderEmail({
+        to: invite.email,
+        name: invite.name,
+        inviteCode: invite.invite_code,
+        assessmentTitle: assessment.title,
+        timeLimitMinutes: assessment.time_limit_minutes,
+        dueAt: assessment.due_at,
+      });
+      await supabase
+        .from("assessment_invites")
+        .update({ reminder_sent_at: new Date().toISOString() })
+        .eq("id", invite.id);
+      sent++;
+    } catch {
+      failed++;
+    }
+  }
+
+  revalidatePath(`/dashboard/assessments/${assessmentId}`);
+  return { status: "success", sent, failed };
+}
+
+export async function deleteInvite(
+  inviteId: string,
+): Promise<{ status: "success" | "error"; message?: string }> {
+  const { error: profileError, supabase, profile } = await getActiveProfile();
+  if (profileError || !profile) return { status: "error", message: profileError };
+
+  const { data: invite } = await supabase
+    .from("assessment_invites")
+    .select("status,assessment_id")
+    .eq("id", inviteId)
+    .maybeSingle();
+
+  if (!invite) return { status: "error", message: "Invite not found." };
+
+  if (invite.status !== "pending") {
+    return {
+      status: "error",
+      message: "Cannot remove an invite that has already been used.",
+    };
+  }
+
+  const { data: assessment } = await supabase
+    .from("assessments")
+    .select("id")
+    .eq("id", invite.assessment_id)
+    .eq("organization_id", profile.organization_id)
+    .maybeSingle();
+
+  if (!assessment) return { status: "error", message: "Invite not found." };
+
+  const { error: deleteError } = await supabase
+    .from("assessment_invites")
+    .delete()
+    .eq("id", inviteId);
+
+  if (deleteError) return { status: "error", message: deleteError.message };
+
+  revalidatePath(`/dashboard/assessments/${invite.assessment_id}`);
   return { status: "success" };
 }

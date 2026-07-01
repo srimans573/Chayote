@@ -256,6 +256,59 @@ export type Database = {
           },
         ];
       };
+      assessment_invites: {
+        Row: {
+          id: string;
+          assessment_id: string;
+          email: string;
+          name: string | null;
+          invite_code: string;
+          status: string;
+          candidate_id: string | null;
+          invited_at: string;
+          email_sent_at: string | null;
+          started_at: string | null;
+          completed_at: string | null;
+          reminder_sent_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          assessment_id: string;
+          email: string;
+          name?: string | null;
+          invite_code?: string;
+          status?: string;
+          candidate_id?: string | null;
+          invited_at?: string;
+          email_sent_at?: string | null;
+          started_at?: string | null;
+          completed_at?: string | null;
+          reminder_sent_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          assessment_id?: string;
+          email?: string;
+          name?: string | null;
+          invite_code?: string;
+          status?: string;
+          candidate_id?: string | null;
+          invited_at?: string;
+          email_sent_at?: string | null;
+          started_at?: string | null;
+          completed_at?: string | null;
+          reminder_sent_at?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "assessment_invites_assessment_id_fkey";
+            columns: ["assessment_id"];
+            isOneToOne: false;
+            referencedRelation: "assessments";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       candidates: {
         Row: {
           id: string;
@@ -266,6 +319,8 @@ export type Database = {
           stage: Database["public"]["Enums"]["candidate_stage"];
           score: number | null;
           risk: Database["public"]["Enums"]["candidate_risk"];
+          invite_id: string | null;
+          session_id: string | null;
           last_activity_at: string | null;
           created_at: string;
           updated_at: string;
@@ -279,6 +334,8 @@ export type Database = {
           stage?: Database["public"]["Enums"]["candidate_stage"];
           score?: number | null;
           risk?: Database["public"]["Enums"]["candidate_risk"];
+          invite_id?: string | null;
+          session_id?: string | null;
           last_activity_at?: string | null;
           created_at?: string;
           updated_at?: string;
@@ -292,6 +349,8 @@ export type Database = {
           stage?: Database["public"]["Enums"]["candidate_stage"];
           score?: number | null;
           risk?: Database["public"]["Enums"]["candidate_risk"];
+          invite_id?: string | null;
+          session_id?: string | null;
           last_activity_at?: string | null;
           created_at?: string;
           updated_at?: string;

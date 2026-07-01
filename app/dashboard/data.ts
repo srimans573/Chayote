@@ -2,6 +2,8 @@ import type { Database } from "@/lib/database.types";
 import { hasSupabaseConfig } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
 
+type InviteRow = Database["public"]["Tables"]["assessment_invites"]["Row"];
+
 type AssessmentRow = Database["public"]["Tables"]["assessments"]["Row"];
 type CodebaseTemplateRow =
   Database["public"]["Tables"]["assessment_codebase_templates"]["Row"];
@@ -54,6 +56,7 @@ export type DashboardCandidate = {
   riskLabel: string;
   roleName: string;
   score: number | null;
+  sessionId: string | null;
   stage: CandidateStage;
   stageLabel: string;
 };
@@ -90,6 +93,21 @@ export type CodebaseTemplateOption = {
 export type CreateAssessmentData = {
   error?: string;
   templates: CodebaseTemplateOption[];
+};
+
+export type AssessmentInvite = {
+  id: string;
+  assessmentId: string;
+  email: string;
+  name: string | null;
+  inviteCode: string;
+  status: "pending" | "started" | "completed";
+  candidateId: string | null;
+  invitedAt: string;
+  emailSentAt: string | null;
+  startedAt: string | null;
+  completedAt: string | null;
+  reminderSentAt: string | null;
 };
 
 export type AssessmentDetailsData = {
@@ -196,6 +214,7 @@ function formatCandidate(
     riskLabel: candidateRiskLabels[row.risk],
     roleName: row.role_name,
     score: row.score,
+    sessionId: row.session_id ?? null,
     stage: row.stage,
     stageLabel: candidateStageLabels[row.stage],
   };
@@ -329,7 +348,7 @@ export async function getDashboardData(): Promise<DashboardData> {
     supabase
       .from("candidates")
       .select(
-        "id, organization_id, assessment_id, full_name, role_name, stage, score, risk, last_activity_at, created_at, updated_at",
+        "id, organization_id, assessment_id, full_name, role_name, stage, score, risk, invite_id, session_id, last_activity_at, created_at, updated_at",
       )
       .eq("organization_id", profile.organization_id)
       .order("updated_at", { ascending: false }),
@@ -461,6 +480,41 @@ export async function getCreateAssessmentData(): Promise<CreateAssessmentData> {
   };
 }
 
+export function formatInvite(row: InviteRow): AssessmentInvite {
+  return {
+    id: row.id,
+    assessmentId: row.assessment_id,
+    email: row.email,
+    name: row.name,
+    inviteCode: row.invite_code,
+    status: row.status as AssessmentInvite["status"],
+    candidateId: row.candidate_id,
+    invitedAt: row.invited_at,
+    emailSentAt: row.email_sent_at,
+    startedAt: row.started_at,
+    completedAt: row.completed_at,
+    reminderSentAt: row.reminder_sent_at,
+  };
+}
+
+export async function getInvitesForAssessment(assessmentId: string): Promise<{
+  invites: AssessmentInvite[];
+  error?: string;
+}> {
+  const profileResult = await getProfile();
+  if (!profileResult.data) return { invites: [], error: profileResult.error };
+  const { supabase } = profileResult.data;
+
+  const { data, error } = await supabase
+    .from("assessment_invites")
+    .select("*")
+    .eq("assessment_id", assessmentId)
+    .order("invited_at", { ascending: false });
+
+  if (error) return { invites: [], error: error.message };
+  return { invites: (data ?? []).map(formatInvite) };
+}
+
 export async function getAssessmentDetailsData(
   assessmentId: string,
 ): Promise<AssessmentDetailsData> {
@@ -505,6 +559,7 @@ export async function getAssessmentDetailsData(
     .from("candidates")
     .select("id", { count: "exact", head: true })
     .eq("assessment_id", assessmentId);
+
 
   if (!assessment.codebase_template_id) {
     return {

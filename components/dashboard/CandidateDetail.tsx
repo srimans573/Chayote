@@ -165,15 +165,28 @@ export function CandidateDetail({ candidate }: { candidate: DashboardCandidate }
     setDetailLoading(true);
     setSessionsListError(null);
     try {
-      const data = await listSessions();
-      await loadDetail(data.sessions);
+      if (candidate.sessionId) {
+        // Fast path: we already know the session_id from the Supabase candidates row,
+        // so construct a minimal session object and skip the expensive listSessions() call.
+        await loadDetail([{
+          session_id: candidate.sessionId,
+          candidate_name: candidate.name,
+          problem_id: "",
+          problem_title: "",
+          started_at: new Date().toISOString(),
+          status: "done",
+        }]);
+      } else {
+        const data = await listSessions();
+        await loadDetail(data.sessions);
+      }
     } catch {
       setSessionsListError(
         `Could not reach the voice-agent backend at ${VOICE_API_BASE}. Make sure it is running.`,
       );
       setDetailLoading(false);
     }
-  }, [loadDetail]);
+  }, [loadDetail, candidate.sessionId, candidate.name]);
 
   const solutionHtml = useMemo(() => {
     if (!challengeProblem?.solution) return "";

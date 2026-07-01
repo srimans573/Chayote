@@ -187,6 +187,7 @@ export function useInterviewSession() {
           problem_statement: args.problem_statement,
           question_guidelines: args.question_guidelines,
           rubric_topics: args.rubric_topics,
+          candidate_id: args.candidate_id,
         });
         setSessionId(session_id);
 

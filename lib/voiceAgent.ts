@@ -16,6 +16,7 @@ export type CreateSessionBody = {
   problem_statement: string;
   question_guidelines: string;
   rubric_topics?: string[];
+  candidate_id?: string;
 };
 
 export type BackendSession = {

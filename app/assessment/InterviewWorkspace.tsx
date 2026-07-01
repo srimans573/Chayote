@@ -614,6 +614,7 @@ export function InterviewWorkspace({
     problem_statement: buildProblemStatement(session),
     question_guidelines: session.rubric,
     rubric_topics: session.rubricTopics,
+    candidate_id: session.candidateId,
   });
   useEffect(() => {
     void start({ ...startArgsRef.current, getCode: () => codeRef.current });

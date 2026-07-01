@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowLeft, ExternalLink } from "lucide-react";
-import { getAssessmentDetailsData } from "@/app/dashboard/data";
+import { ArrowLeft } from "lucide-react";
+import { getAssessmentDetailsData, getInvitesForAssessment } from "@/app/dashboard/data";
 import { CodebaseFilesModal } from "@/components/dashboard/CodebaseFilesModal";
+import { InvitePanel } from "@/components/dashboard/InvitePanel";
 import { EditAssessmentForm } from "./EditAssessmentForm";
 
 export const metadata: Metadata = {
@@ -24,8 +25,10 @@ export default async function AssessmentDetailPage({
 }: AssessmentDetailPageProps) {
   const { id } = await params;
   const { created } = await searchParams;
-  const { assessment, codebaseFiles, error } =
-    await getAssessmentDetailsData(id);
+  const [{ assessment, codebaseFiles, error }, { invites }] = await Promise.all([
+    getAssessmentDetailsData(id),
+    getInvitesForAssessment(id),
+  ]);
 
   return (
     <>
@@ -50,14 +53,6 @@ export default async function AssessmentDetailPage({
 
         {assessment ? (
           <div className="flex shrink-0 items-center gap-2">
-            <Link
-              className="inline-flex h-9 items-center gap-1.5 rounded-[3px] border border-[#a3c740] bg-[#f3ffe0] px-3 text-sm font-semibold text-[#314200] transition duration-150 hover:bg-[#e8ffc4]"
-              href={`/assessment?code=${assessment.candidateAccessCode}`}
-              target="_blank"
-            >
-              <ExternalLink size={14} />
-              Assessment link
-            </Link>
             <CodebaseFilesModal
               files={codebaseFiles}
               title={`${assessment.title} codebase`}
@@ -81,19 +76,7 @@ export default async function AssessmentDetailPage({
       {assessment ? (
         <section className="mt-6 grid gap-5 xl:grid-cols-[360px_1fr]">
           <article className="rounded-[8px] border border-[#f0eeea] bg-white p-4">
-            <p className="text-xs font-semibold text-[#62675e]">
-              Candidate entry code
-            </p>
-            <p className="mt-4 rounded-[6px] border border-[#dedbd5] bg-[#fbfaf7] px-4 py-4 text-center font-mono text-[34px] font-black tracking-[0.18em] text-[#202322]">
-              {assessment.candidateAccessCode}
-            </p>
-            <p className="mt-3 text-sm leading-6 text-[#62675e]">
-              Candidates can enter this code at{" "}
-              <span className="font-mono font-semibold text-[#202322]">
-                /assessment
-              </span>
-              .
-            </p>
+            <InvitePanel assessmentId={id} invites={invites} />
           </article>
 
           <article className="rounded-[8px] border border-[#f0eeea] bg-white p-4">
