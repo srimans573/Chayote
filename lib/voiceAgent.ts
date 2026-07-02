@@ -302,6 +302,16 @@ export type SessionInsights = {
   generated_at: number;
 };
 
+export async function getSessionByCandidate(
+  candidateId: string,
+): Promise<{ session_id: string }> {
+  const res = await fetch(
+    `${VOICE_API_BASE}/dashboard/candidate/${candidateId}/session`,
+    { cache: "no-store" },
+  );
+  return asJson(res, "getSessionByCandidate");
+}
+
 export async function getInsights(
   sessionId: string,
 ): Promise<{ session_id: string; insights: SessionInsights }> {

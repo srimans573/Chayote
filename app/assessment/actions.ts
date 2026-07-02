@@ -7,6 +7,8 @@ import { createClient } from "@/lib/supabase/server";
 
 type CandidateEntryField = "accessCode" | "fullName";
 
+const DEMO_ASSESSMENT_ID = "7ab56963-4ec5-41b3-80a3-f9e81622f540";
+
 export type CandidateAssessmentSession = {
   assessmentId: string;
   candidateId: string;
@@ -18,6 +20,7 @@ export type CandidateAssessmentSession = {
   title: string;
   rubric: string;
   rubricTopics: string[];
+  isDemo: boolean;
 };
 
 export type CandidateEntryState = {
@@ -128,6 +131,7 @@ export async function joinAssessment(
       title: session.assessment_title,
       rubric: session.rubric_text ?? "",
       rubricTopics: parseStringArray(session.rubric_topics),
+      isDemo: session.assessment_id === DEMO_ASSESSMENT_ID,
     },
     status: "ready",
   };

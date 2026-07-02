@@ -42,6 +42,9 @@ async def create_session(body: CreateSessionRequest):
     await r.set(f"session:{session_id}:meta", json.dumps(meta))
     await r.rpush("sessions:all", session_id)
 
+    if body.candidate_id:
+        await r.set(f"candidate:{body.candidate_id}:session_id", session_id)
+
     return {"session_id": session_id}
 
 

@@ -22,6 +22,15 @@ async def list_sessions():
     return {"sessions": sessions}
 
 
+@router.get("/candidate/{candidate_id}/session")
+async def get_session_by_candidate(candidate_id: str):
+    r = get_redis()
+    session_id = await r.get(f"candidate:{candidate_id}:session_id")
+    if not session_id:
+        raise HTTPException(status_code=404, detail="No session found for this candidate")
+    return {"session_id": session_id}
+
+
 @router.get("/session/{session_id}/transcript")
 async def get_transcript(session_id: str):
     r = get_redis()

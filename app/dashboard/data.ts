@@ -2,6 +2,8 @@ import type { Database } from "@/lib/database.types";
 import { hasSupabaseConfig } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
 
+const DEMO_ASSESSMENT_ID = "7ab56963-4ec5-41b3-80a3-f9e81622f540";
+
 type InviteRow = Database["public"]["Tables"]["assessment_invites"]["Row"];
 
 type AssessmentRow = Database["public"]["Tables"]["assessments"]["Row"];
@@ -231,6 +233,23 @@ function countCandidatesByAssessment(rows: CandidateRow[]) {
   }, {});
 }
 
+function completionPercentByAssessment(rows: CandidateRow[]) {
+  const totals: Record<string, { total: number; done: number }> = {};
+  for (const row of rows) {
+    if (!row.assessment_id) continue;
+    const entry = totals[row.assessment_id] ?? { total: 0, done: 0 };
+    entry.total += 1;
+    if (row.score !== null) entry.done += 1;
+    totals[row.assessment_id] = entry;
+  }
+  return Object.fromEntries(
+    Object.entries(totals).map(([id, { total, done }]) => [
+      id,
+      total > 0 ? Math.round((done / total) * 100) : 0,
+    ]),
+  );
+}
+
 function groupFilesByTemplate(rows: CodebaseFileRow[]) {
   return rows.reduce<Record<string, CodebaseFilePreview[]>>((groups, file) => {
     const files = groups[file.codebase_template_id] ?? [];
@@ -344,6 +363,7 @@ export async function getDashboardData(): Promise<DashboardData> {
         "id, organization_id, title, role_name, status, time_limit_minutes, technologies, frontend_technology, backend_technology, job_description, codebase_template_id, rubric_source, rubric_text, rubric_topics, candidate_access_code, due_at, completion_percent, median_score, hm_spec, codebase_source, codebase_spec, created_by, created_at, updated_at",
       )
       .eq("organization_id", profile.organization_id)
+      .neq("id", DEMO_ASSESSMENT_ID)
       .order("updated_at", { ascending: false }),
     supabase
       .from("candidates")
@@ -351,6 +371,7 @@ export async function getDashboardData(): Promise<DashboardData> {
         "id, organization_id, assessment_id, full_name, role_name, stage, score, risk, invite_id, session_id, last_activity_at, created_at, updated_at",
       )
       .eq("organization_id", profile.organization_id)
+      .neq("assessment_id", DEMO_ASSESSMENT_ID)
       .order("updated_at", { ascending: false }),
   ]);
 
@@ -364,6 +385,7 @@ export async function getDashboardData(): Promise<DashboardData> {
 
   const candidates = candidatesResult.data ?? [];
   const candidateCounts = countCandidatesByAssessment(candidates);
+  const completionPcts = completionPercentByAssessment(candidates);
   const assessmentTitleById = Object.fromEntries(
     (assessmentsResult.data ?? []).map((assessment) => [assessment.id, assessment.title]),
   );
@@ -372,6 +394,7 @@ export async function getDashboardData(): Promise<DashboardData> {
     assessments: (assessmentsResult.data ?? []).map((assessment) => ({
       ...formatAssessment(assessment),
       candidateCount: candidateCounts[assessment.id] ?? 0,
+      completionPercent: completionPcts[assessment.id] ?? 0,
     })),
     candidates: candidates.map((candidate) => formatCandidate(candidate, assessmentTitleById)),
     profile,
@@ -555,15 +578,30 @@ export async function getAssessmentDetailsData(
     };
   }
 
-  const { count: candidateCount } = await supabase
-    .from("candidates")
-    .select("id", { count: "exact", head: true })
-    .eq("assessment_id", assessmentId);
+  const [{ count: candidateCount }, { count: completedCount }] = await Promise.all([
+    supabase
+      .from("candidates")
+      .select("id", { count: "exact", head: true })
+      .eq("assessment_id", assessmentId),
+    supabase
+      .from("candidates")
+      .select("id", { count: "exact", head: true })
+      .eq("assessment_id", assessmentId)
+      .not("score", "is", null),
+  ]);
 
+
+  const total = candidateCount ?? 0;
+  const done = completedCount ?? 0;
+  const completionPercent = total > 0 ? Math.round((done / total) * 100) : 0;
+
+  function withCounts(base: DashboardAssessment): DashboardAssessment {
+    return { ...base, candidateCount: total, completionPercent };
+  }
 
   if (!assessment.codebase_template_id) {
     return {
-      assessment: { ...formatAssessment(assessment), candidateCount: candidateCount ?? 0 },
+      assessment: withCounts(formatAssessment(assessment)),
       codebaseFiles: [],
     };
   }
@@ -576,14 +614,14 @@ export async function getAssessmentDetailsData(
 
   if (filesError) {
     return {
-      assessment: { ...formatAssessment(assessment), candidateCount: candidateCount ?? 0 },
+      assessment: withCounts(formatAssessment(assessment)),
       codebaseFiles: [],
       error: filesError.message,
     };
   }
 
   return {
-    assessment: { ...formatAssessment(assessment), candidateCount: candidateCount ?? 0 },
+    assessment: withCounts(formatAssessment(assessment)),
     codebaseFiles: (codebaseFiles ?? []).map(formatCodebaseFile),
   };
 }

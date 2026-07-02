@@ -8,6 +8,7 @@ import type { DashboardCandidate } from "@/app/dashboard/data";
 import {
   getChallengeReview,
   getInsights,
+  getSessionByCandidate,
   getSessionScreenRecording,
   getSessionVideo,
   getTranscript,
@@ -166,8 +167,7 @@ export function CandidateDetail({ candidate }: { candidate: DashboardCandidate }
     setSessionsListError(null);
     try {
       if (candidate.sessionId) {
-        // Fast path: we already know the session_id from the Supabase candidates row,
-        // so construct a minimal session object and skip the expensive listSessions() call.
+        // Fast path: session_id written back by pipeline after completion.
         await loadDetail([{
           session_id: candidate.sessionId,
           candidate_name: candidate.name,
@@ -177,8 +177,28 @@ export function CandidateDetail({ candidate }: { candidate: DashboardCandidate }
           status: "done",
         }]);
       } else {
-        const data = await listSessions();
-        await loadDetail(data.sessions);
+        // Try the reverse Redis index (set at session-creation time) before
+        // falling back to name matching, which breaks for same-name candidates.
+        let resolvedSessionId: string | null = null;
+        try {
+          const res = await getSessionByCandidate(candidate.id);
+          resolvedSessionId = res.session_id;
+        } catch {
+          // Not indexed yet — fall through to name matching below.
+        }
+        if (resolvedSessionId) {
+          await loadDetail([{
+            session_id: resolvedSessionId,
+            candidate_name: candidate.name,
+            problem_id: "",
+            problem_title: "",
+            started_at: new Date().toISOString(),
+            status: "done",
+          }]);
+        } else {
+          const data = await listSessions();
+          await loadDetail(data.sessions);
+        }
       }
     } catch {
       setSessionsListError(

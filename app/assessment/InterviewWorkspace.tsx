@@ -683,6 +683,15 @@ export function InterviewWorkspace({
     }
   }
 
+  useEffect(() => {
+    if (status === "ended" && session.isDemo && sessionIdRef.current) {
+      const timer = setTimeout(() => {
+        window.location.href = `/assessment/results?session=${sessionIdRef.current}`;
+      }, 2500);
+      return () => clearTimeout(timer);
+    }
+  }, [status, session.isDemo]);
+
   const live = status === "live";
   const dotColor =
     status === "live"
@@ -1157,17 +1166,30 @@ export function InterviewWorkspace({
                 <h2 className="mt-4 text-lg font-bold text-[var(--tk-text)]">
                   Interview submitted
                 </h2>
-                <p className="mt-2 text-sm text-[var(--tk-text-dim)]">
-                  Your session is being processed. The recruiter will see your
-                  results on their dashboard.
-                </p>
-                <button
-                  type="button"
-                  onClick={() => window.location.reload()}
-                  className="mt-6 rounded-md bg-[var(--tk-accent)] px-4 py-2 text-sm font-semibold text-[var(--tk-accent-text-on)] transition-colors hover:bg-[var(--tk-accent-hover)]"
-                >
-                  Return to lobby
-                </button>
+                {session.isDemo ? (
+                  <>
+                    <p className="mt-2 text-sm text-[var(--tk-text-dim)]">
+                      Generating your personalised feedback…
+                    </p>
+                    <div className="mt-4 flex justify-center">
+                      <Loader2 className="h-5 w-5 animate-spin text-[var(--tk-accent)]" />
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <p className="mt-2 text-sm text-[var(--tk-text-dim)]">
+                      Your session is being processed. The recruiter will see your
+                      results on their dashboard.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => window.location.reload()}
+                      className="mt-6 rounded-md bg-[var(--tk-accent)] px-4 py-2 text-sm font-semibold text-[var(--tk-accent-text-on)] transition-colors hover:bg-[var(--tk-accent-hover)]"
+                    >
+                      Return to lobby
+                    </button>
+                  </>
+                )}
               </>
             )}
           </div>
